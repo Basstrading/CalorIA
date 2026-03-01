@@ -12,7 +12,7 @@ import type { ProfileInput } from '../hooks/useProfile';
 import type { Goal } from '../types';
 
 interface OnboardingProps {
-  onComplete: (data: ProfileInput) => Promise<boolean>;
+  onComplete: (data: ProfileInput) => Promise<boolean | string>;
   initialData?: ProfileInput;
 }
 
@@ -123,9 +123,9 @@ export function Onboarding({ onComplete, initialData }: OnboardingProps) {
     if (!data) return;
 
     setSubmitting(true);
-    const success = await onComplete(data);
-    if (!success) {
-      setError('Erreur lors de la sauvegarde. Veuillez reessayer.');
+    const result = await onComplete(data);
+    if (result !== true) {
+      setError(typeof result === 'string' ? result : 'Erreur lors de la sauvegarde.');
     }
     setSubmitting(false);
   };

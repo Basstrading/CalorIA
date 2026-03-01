@@ -51,8 +51,8 @@ export function useProfile(user: User | null) {
     return false;
   }, [user, getProfile]);
 
-  const updateProfile = useCallback(async (data: Partial<ProfileInput>) => {
-    if (!user || !profile) return false;
+  const updateProfile = useCallback(async (data: Partial<ProfileInput>): Promise<true | string> => {
+    if (!user || !profile) return 'Utilisateur ou profil introuvable';
     const merged = { ...profile, ...data };
     const bmr = calculateBMR(merged.sex, merged.weight, merged.height, merged.age);
     const { error } = await supabase
@@ -72,7 +72,7 @@ export function useProfile(user: User | null) {
       await getProfile();
       return true;
     }
-    return false;
+    return error.message || 'Erreur Supabase inconnue';
   }, [user, profile, getProfile]);
 
   return { profile, loading, hasProfile, createProfile, updateProfile };

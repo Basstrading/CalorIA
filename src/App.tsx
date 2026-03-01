@@ -68,12 +68,13 @@ function App() {
   // Editing profile — onboarding in edit mode
   if (editingProfile) {
     const handleEditComplete = async (data: Parameters<typeof updateProfile>[0]) => {
-      const success = await updateProfile(data);
-      if (success) {
+      const result = await updateProfile(data);
+      if (result === true) {
         await resetPlan();
         setEditingProfile(false);
+        return true;
       }
-      return success;
+      return result; // error message string
     };
     return (
       <Onboarding
