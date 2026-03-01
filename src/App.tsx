@@ -8,6 +8,7 @@ import { Register } from './pages/Register';
 import { Onboarding } from './pages/Onboarding';
 import { DailyPlanner } from './components/planner/DailyPlanner';
 import { DailyDashboard } from './components/dashboard/DailyDashboard';
+import { InstallPrompt } from './components/ui/InstallPrompt';
 
 type AuthPage = 'login' | 'register';
 
@@ -36,19 +37,25 @@ function App() {
   if (!user) {
     if (authPage === 'register') {
       return (
-        <Register
-          onRegister={signUp}
-          onNavigateLogin={() => setAuthPage('login')}
-          error={error}
-        />
+        <>
+          <InstallPrompt />
+          <Register
+            onRegister={signUp}
+            onNavigateLogin={() => setAuthPage('login')}
+            error={error}
+          />
+        </>
       );
     }
     return (
-      <Login
-        onLogin={signIn}
-        onNavigateRegister={() => setAuthPage('register')}
-        error={error}
-      />
+      <>
+        <InstallPrompt />
+        <Login
+          onLogin={signIn}
+          onNavigateRegister={() => setAuthPage('register')}
+          error={error}
+        />
+      </>
     );
   }
 
