@@ -18,6 +18,7 @@ const MEAL_TYPES: { value: MealType; label: string; emoji: string }[] = [
 interface RecipeSuggestionsProps {
   planId: string;
   budget: number;
+  totalCaloriesToday: number;
   meals: Meal[];
   profile: UserProfile;
   onAddMeal: (data: Omit<Meal, 'id' | 'user_id' | 'created_at'>) => Promise<boolean>;
@@ -27,6 +28,7 @@ interface RecipeSuggestionsProps {
 export function RecipeSuggestions({
   planId,
   budget,
+  totalCaloriesToday,
   meals,
   profile,
   onAddMeal,
@@ -146,9 +148,15 @@ export function RecipeSuggestions({
           </div>
 
           {/* Budget info */}
-          <div className="flex items-center justify-between bg-card rounded-card px-4 py-3">
-            <span className="text-sm text-text-secondary">Budget disponible</span>
-            <span className="text-sm font-bold text-accent">{availableCalories} kcal</span>
+          <div className="bg-accent-soft border border-accent/20 rounded-card px-4 py-3 flex flex-col gap-1">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-text-secondary">Budget restant (journee)</span>
+              <span className="text-sm font-bold text-accent">{Math.max(0, budget - totalCaloriesToday)} kcal</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-text-secondary">Budget ce repas</span>
+              <span className="text-sm font-bold text-text-primary">{availableCalories} kcal</span>
+            </div>
           </div>
 
           {/* Congrats message when < 100 kcal remaining */}
@@ -202,6 +210,27 @@ export function RecipeSuggestions({
                     <span>{recipe.carbs}g G</span>
                     <span>{recipe.fats}g L</span>
                   </div>
+
+                  {/* Portion recommendation */}
+                  {(() => {
+                    const dailyRemaining = Math.max(0, budget - totalCaloriesToday);
+                    if (recipe.calories > dailyRemaining && dailyRemaining > 0) {
+                      const pct = Math.round((dailyRemaining / recipe.calories) * 100);
+                      return (
+                        <p className="text-xs text-amber-400">
+                          Cette recette depasse ton budget restant. Mange ~{pct}% de la portion pour rester a {dailyRemaining} kcal.
+                        </p>
+                      );
+                    }
+                    if (dailyRemaining > 0) {
+                      return (
+                        <p className="text-xs text-accent">
+                          Cette recette utilise {Math.round((recipe.calories / dailyRemaining) * 100)}% de ton budget restant.
+                        </p>
+                      );
+                    }
+                    return null;
+                  })()}
 
                   {/* Ingredients */}
                   <p className="text-xs text-text-secondary">

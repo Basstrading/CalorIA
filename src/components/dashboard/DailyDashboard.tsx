@@ -219,6 +219,7 @@ export function DailyDashboard({
         <RecipeSuggestions
           planId={plan.id}
           budget={plan.calorie_budget}
+          totalCaloriesToday={totalCaloriesToday}
           meals={meals}
           profile={profile}
           onAddMeal={onAddMeal}
