@@ -43,6 +43,10 @@ export function RecipeSuggestions({
   const availableCalories = Math.max(0, Math.round(split[mealType] - consumedForType));
 
   const fetchSuggestions = useCallback(async () => {
+    if (availableCalories < 100) {
+      setSuggestions([]);
+      return;
+    }
     setError(null);
     setLoading(true);
     setSuggestions([]);
@@ -118,6 +122,18 @@ export function RecipeSuggestions({
             <span className="text-sm text-text-secondary">Budget disponible</span>
             <span className="text-sm font-bold text-accent">{availableCalories} kcal</span>
           </div>
+
+          {/* Congrats message when < 100 kcal remaining */}
+          {availableCalories < 100 && !loading && (
+            <div className="bg-accent/10 border border-accent/30 rounded-card p-4 text-center flex flex-col gap-2">
+              <p className="text-lg font-bold text-accent">Bravo !</p>
+              <p className="text-sm text-text-secondary">
+                {availableCalories === 0
+                  ? 'Tu as atteint ton objectif pour ce repas. Bien joue !'
+                  : `Il ne te reste que ${availableCalories} kcal pour ce repas. Tu as presque atteint ton objectif !`}
+              </p>
+            </div>
+          )}
 
           {/* Loading skeleton */}
           {loading && (
