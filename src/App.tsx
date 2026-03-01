@@ -111,6 +111,7 @@ function App() {
       onAddMeal={addMeal}
       onDeleteMeal={deleteMeal}
       onResetPlan={resetPlan}
+      onEditProfile={() => setEditingProfile(true)}
       onSignOut={signOut}
     />
   );

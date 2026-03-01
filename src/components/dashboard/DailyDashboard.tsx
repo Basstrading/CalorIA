@@ -18,6 +18,7 @@ interface DailyDashboardProps {
   onAddMeal: (data: Omit<Meal, 'id' | 'user_id' | 'created_at'>) => Promise<boolean>;
   onDeleteMeal: (id: string) => Promise<boolean>;
   onResetPlan: () => Promise<boolean>;
+  onEditProfile: () => void;
   onSignOut: () => void;
 }
 
@@ -49,6 +50,7 @@ export function DailyDashboard({
   onAddMeal,
   onDeleteMeal,
   onResetPlan,
+  onEditProfile,
   onSignOut,
 }: DailyDashboardProps) {
   const [showAddMeal, setShowAddMeal] = useState(false);
@@ -102,13 +104,27 @@ export function DailyDashboard({
             <h1 className="text-xl font-bold tracking-tight mt-0.5">Mon budget</h1>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={onSignOut}
-          className="text-xs text-text-secondary hover:text-text-primary transition-colors"
-        >
-          Deconnexion
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onEditProfile}
+            className="p-2 text-text-secondary hover:text-text-primary transition-colors"
+            aria-label="Modifier mon profil"
+            title="Modifier mon profil"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={onSignOut}
+            className="text-xs text-text-secondary hover:text-text-primary transition-colors"
+          >
+            Deconnexion
+          </button>
+        </div>
       </div>
 
       {/* Gauge */}
