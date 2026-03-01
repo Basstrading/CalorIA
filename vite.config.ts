@@ -68,6 +68,20 @@ export default defineConfig({
               },
             },
           },
+          {
+            urlPattern: /^https:\/\/world\.openfoodfacts\.org\/.*/i,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'openfoodfacts-cache',
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 60 * 60 * 24 * 7,
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
         ],
       },
     }),

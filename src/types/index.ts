@@ -62,3 +62,21 @@ export interface RecipeSuggestion {
   fats: number;
   ingredients: string[];
 }
+
+export interface FoodDatabaseEntry {
+  name: string;
+  calories_per_100g: number;
+  proteins_per_100g: number;
+  carbs_per_100g: number;
+  fats_per_100g: number;
+  source: 'ciqual' | 'off';
+  barcode?: string;
+}
+
+export interface CiqualRawEntry {
+  alim_nom_fr: string;
+  energie_kcal: number;
+  proteines: number;
+  glucides: number;
+  lipides: number;
+}

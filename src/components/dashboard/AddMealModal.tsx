@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
-import type { Meal } from '../../types';
+import { FoodAutocomplete } from '../food/FoodAutocomplete';
+import type { FoodDatabaseEntry, Meal } from '../../types';
 
 type MealType = Meal['meal_type'];
 
@@ -28,6 +29,41 @@ export function AddMealModal({ planId, onSave, onClose }: AddMealModalProps) {
   const [quantity, setQuantity] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Track selected food for proportional recalculation
+  const [selectedFood, setSelectedFood] = useState<FoodDatabaseEntry | null>(null);
+
+  const handleFoodSelect = (entry: FoodDatabaseEntry) => {
+    setSelectedFood(entry);
+    setCalories(String(Math.round(entry.calories_per_100g)));
+    setProteins(String(entry.proteins_per_100g));
+    setCarbs(String(entry.carbs_per_100g));
+    setFats(String(entry.fats_per_100g));
+    setQuantity('100');
+  };
+
+  const handleQuantityChange = (val: string) => {
+    setQuantity(val);
+    if (selectedFood) {
+      const qty = parseFloat(val);
+      if (!isNaN(qty) && qty > 0) {
+        const ratio = qty / 100;
+        setCalories(String(Math.round(selectedFood.calories_per_100g * ratio)));
+        setProteins(String(Math.round(selectedFood.proteins_per_100g * ratio * 10) / 10));
+        setCarbs(String(Math.round(selectedFood.carbs_per_100g * ratio * 10) / 10));
+        setFats(String(Math.round(selectedFood.fats_per_100g * ratio * 10) / 10));
+      }
+    }
+  };
+
+  const handleManualMacroEdit = (
+    setter: (v: string) => void,
+    val: string,
+  ) => {
+    setter(val);
+    // Detach auto-calculation when user manually edits a nutritional field
+    setSelectedFood(null);
+  };
 
   const handleSave = async () => {
     setError(null);
@@ -108,13 +144,14 @@ export function AddMealModal({ planId, onSave, onClose }: AddMealModalProps) {
             ))}
           </div>
 
-          {/* Inputs */}
-          <Input
+          {/* Food autocomplete */}
+          <FoodAutocomplete
             id="food-name"
             label="Aliment"
             placeholder="Ex: Poulet grille"
             value={foodName}
-            onChange={(e) => setFoodName(e.target.value)}
+            onChange={setFoodName}
+            onSelect={handleFoodSelect}
           />
 
           <div className="grid grid-cols-2 gap-3">
@@ -126,7 +163,7 @@ export function AddMealModal({ planId, onSave, onClose }: AddMealModalProps) {
               placeholder="350"
               suffix="kcal"
               value={calories}
-              onChange={(e) => setCalories(e.target.value)}
+              onChange={(e) => handleManualMacroEdit(setCalories, e.target.value)}
             />
             <Input
               id="quantity"
@@ -136,7 +173,7 @@ export function AddMealModal({ planId, onSave, onClose }: AddMealModalProps) {
               placeholder="200"
               suffix="g"
               value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
+              onChange={(e) => handleQuantityChange(e.target.value)}
             />
           </div>
 
@@ -149,7 +186,7 @@ export function AddMealModal({ planId, onSave, onClose }: AddMealModalProps) {
               placeholder="0"
               suffix="g"
               value={proteins}
-              onChange={(e) => setProteins(e.target.value)}
+              onChange={(e) => handleManualMacroEdit(setProteins, e.target.value)}
             />
             <Input
               id="carbs"
@@ -159,7 +196,7 @@ export function AddMealModal({ planId, onSave, onClose }: AddMealModalProps) {
               placeholder="0"
               suffix="g"
               value={carbs}
-              onChange={(e) => setCarbs(e.target.value)}
+              onChange={(e) => handleManualMacroEdit(setCarbs, e.target.value)}
             />
             <Input
               id="fats"
@@ -169,7 +206,7 @@ export function AddMealModal({ planId, onSave, onClose }: AddMealModalProps) {
               placeholder="0"
               suffix="g"
               value={fats}
-              onChange={(e) => setFats(e.target.value)}
+              onChange={(e) => handleManualMacroEdit(setFats, e.target.value)}
             />
           </div>
 
