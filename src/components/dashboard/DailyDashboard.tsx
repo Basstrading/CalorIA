@@ -54,7 +54,14 @@ export function DailyDashboard({
   onSignOut,
 }: DailyDashboardProps) {
   const [showAddMeal, setShowAddMeal] = useState(false);
-  const [showScanner, setShowScanner] = useState(false);
+  const [showScanner, setShowScanner] = useState(() => {
+    // Restore scanner state after mobile camera intent reload
+    if (sessionStorage.getItem('caloria_scanner_open') === '1') {
+      sessionStorage.removeItem('caloria_scanner_open');
+      return true;
+    }
+    return false;
+  });
   const [showRecipes, setShowRecipes] = useState(false);
 
   const split = useMemo(
@@ -73,11 +80,21 @@ export function DailyDashboard({
     return result;
   }, [meals]);
 
+  const openScanner = () => {
+    sessionStorage.setItem('caloria_scanner_open', '1');
+    setShowScanner(true);
+  };
+
+  const closeScanner = () => {
+    sessionStorage.removeItem('caloria_scanner_open');
+    setShowScanner(false);
+  };
+
   const handleFabAction = (action: FabAction) => {
     if (action === 'manual') {
       setShowAddMeal(true);
     } else if (action === 'scan') {
-      setShowScanner(true);
+      openScanner();
     } else if (action === 'ideas') {
       setShowRecipes(true);
     }
@@ -210,7 +227,7 @@ export function DailyDashboard({
           budget={plan.calorie_budget}
           totalCaloriesToday={totalCaloriesToday}
           onAddMeal={onAddMeal}
-          onClose={() => setShowScanner(false)}
+          onClose={closeScanner}
         />
       )}
 
