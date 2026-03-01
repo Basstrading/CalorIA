@@ -33,8 +33,7 @@ export function FoodScanner({
   onAddMeal,
   onClose,
 }: FoodScannerProps) {
-  const cameraInputRef = useRef<HTMLInputElement>(null);
-  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [screen, setScreen] = useState<Screen>('capture');
   const [imageBase64, setImageBase64] = useState<string | null>(null);
@@ -172,17 +171,9 @@ export function FoodScanner({
             <div className="w-9" />
           </div>
 
-          {/* Hidden file inputs */}
+          {/* Single file input — no capture attribute for max mobile compatibility */}
           <input
-            ref={cameraInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="hidden"
-            onChange={handleInputChange}
-          />
-          <input
-            ref={galleryInputRef}
+            ref={fileInputRef}
             type="file"
             accept="image/*"
             className="hidden"
@@ -194,13 +185,13 @@ export function FoodScanner({
             <div className="flex flex-col items-center gap-5 py-4">
               <h2 className="text-xl font-bold">Scanner un aliment</h2>
               <p className="text-text-secondary text-sm text-center">
-                Prends en photo ton plat et l'IA estimera ses valeurs nutritionnelles
+                Prends en photo ou choisis une image de ton plat
               </p>
 
-              {/* Camera button */}
+              {/* Single button — OS will offer camera or gallery */}
               <button
                 type="button"
-                onClick={() => cameraInputRef.current?.click()}
+                onClick={() => fileInputRef.current?.click()}
                 className="w-24 h-24 rounded-full bg-accent flex items-center justify-center active:scale-95 transition-transform"
               >
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-dark">
@@ -209,15 +200,7 @@ export function FoodScanner({
                 </svg>
               </button>
 
-              <div className="flex gap-4">
-                <button
-                  type="button"
-                  onClick={() => galleryInputRef.current?.click()}
-                  className="text-sm text-accent font-medium"
-                >
-                  Galerie
-                </button>
-              </div>
+              <p className="text-xs text-text-secondary">Appareil photo ou galerie</p>
 
               {error && (
                 <div className="flex flex-col items-center gap-2">
