@@ -148,8 +148,8 @@ export function FoodScanner({
 
   return (
     <>
-      {/* Overlay */}
-      <div className="fixed inset-0 bg-black/50 z-50" onClick={onClose} />
+      {/* Overlay — no click-to-close to prevent phantom taps from mobile camera intent */}
+      <div className="fixed inset-0 bg-black/50 z-50" />
 
       {/* Bottom sheet */}
       <div className="fixed inset-x-0 bottom-0 z-50 bg-dark rounded-t-[20px] max-h-[90vh] overflow-y-auto animate-slide-up">
