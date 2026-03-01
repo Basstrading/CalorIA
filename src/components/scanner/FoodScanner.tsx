@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { Input } from '../ui/Input';
@@ -8,7 +8,7 @@ import { analyzeFood } from '../../lib/openrouter';
 import type { FoodAnalysis, Meal } from '../../types';
 
 type MealType = Meal['meal_type'];
-type Screen = 'capture' | 'analyzing' | 'result';
+type Screen = 'capture' | 'camera' | 'analyzing' | 'result';
 
 const MEAL_TYPES: { value: MealType; label: string; emoji: string }[] = [
   { value: 'breakfast', label: 'Petit-dej', emoji: '\u{2615}' },
@@ -34,6 +34,8 @@ export function FoodScanner({
   onClose,
 }: FoodScannerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   const [screen, setScreen] = useState<Screen>('capture');
   const [imageBase64, setImageBase64] = useState<string | null>(null);
@@ -50,46 +52,115 @@ export function FoodScanner({
   const [submitting, setSubmitting] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const handleFileSelected = async (file: File) => {
-    setError(null);
+  // Stop camera stream on unmount
+  const stopCamera = useCallback(() => {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    return () => stopCamera();
+  }, [stopCamera]);
+
+  const processImage = async (base64: string) => {
+    setImageBase64(base64);
     setScreen('analyzing');
 
     try {
-      const base64 = await fileToBase64(file);
-      setImageBase64(base64);
-
       const result = await analyzeFood(base64);
       setAnalysis(result);
       setEditedName(result.food_name);
       setEditedCalories(String(result.calories_per_100g));
 
-      // Calculate default quantity
       const caloriesRestantes = Math.max(0, budget - totalCaloriesToday);
       const grammesMax = result.calories_per_100g > 0
         ? Math.round((caloriesRestantes / result.calories_per_100g) * 100)
         : 100;
-      const clamped = Math.max(10, Math.min(grammesMax, 1000));
-      setQuantity(clamped);
-
+      setQuantity(Math.max(10, Math.min(grammesMax, 1000)));
       setScreen('result');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur lors de l\'analyse. Reessaie avec une autre photo.');
+      setError(err instanceof Error ? err.message : 'Erreur lors de l\'analyse. Reessaie.');
       setScreen('capture');
     }
   };
 
+  // Gallery file input handler
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) {
       setError('Aucune image recue. Reessaie.');
       return;
     }
-    handleFileSelected(file);
-    // Reset so the same file can be selected again
+    setError(null);
+    setScreen('analyzing');
+    fileToBase64(file)
+      .then((base64) => processImage(base64))
+      .catch(() => {
+        setError('Impossible de lire l\'image. Reessaie.');
+        setScreen('capture');
+      });
     e.target.value = '';
   };
 
+  // In-app camera via getUserMedia
+  const openCamera = async () => {
+    setError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 960 } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      setScreen('camera');
+      // Wait for video element to mount, then attach stream
+      requestAnimationFrame(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      });
+    } catch {
+      setError('Impossible d\'acceder a la camera. Utilise la galerie.');
+    }
+  };
+
+  const capturePhoto = () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0);
+
+    stopCamera();
+
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          setError('Capture echouee. Reessaie.');
+          setScreen('capture');
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64 = (reader.result as string).split(',')[1];
+          processImage(base64);
+        };
+        reader.onerror = () => {
+          setError('Erreur de lecture. Reessaie.');
+          setScreen('capture');
+        };
+        reader.readAsDataURL(blob);
+      },
+      'image/jpeg',
+      0.7,
+    );
+  };
+
   const handleRetry = () => {
+    stopCamera();
     setError(null);
     setImageBase64(null);
     setAnalysis(null);
@@ -108,16 +179,16 @@ export function FoodScanner({
       ? (editedName.trim() || analysis.food_name)
       : analysis.food_name;
 
-    const ratio = quantity / 100;
+    const r = quantity / 100;
     try {
       const success = await onAddMeal({
         plan_id: planId,
         meal_type: mealType,
         food_name: foodName,
-        calories: Math.round(calPer100 * ratio),
-        proteins: Math.round(analysis.proteins_per_100g * ratio),
-        carbs: Math.round(analysis.carbs_per_100g * ratio),
-        fats: Math.round(analysis.fats_per_100g * ratio),
+        calories: Math.round(calPer100 * r),
+        proteins: Math.round(analysis.proteins_per_100g * r),
+        carbs: Math.round(analysis.carbs_per_100g * r),
+        fats: Math.round(analysis.fats_per_100g * r),
         quantity_grams: quantity,
       });
 
@@ -147,7 +218,7 @@ export function FoodScanner({
 
   return (
     <>
-      {/* Overlay — no click-to-close to prevent phantom taps from mobile camera intent */}
+      {/* Overlay */}
       <div className="fixed inset-0 bg-black/50 z-50" />
 
       {/* Bottom sheet */}
@@ -157,7 +228,7 @@ export function FoodScanner({
           <div className="flex items-center">
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => { stopCamera(); onClose(); }}
               className="p-2 -ml-2 text-text-secondary hover:text-text-primary transition-colors"
               aria-label="Retour"
             >
@@ -171,7 +242,7 @@ export function FoodScanner({
             <div className="w-9" />
           </div>
 
-          {/* Single file input — no capture attribute for max mobile compatibility */}
+          {/* Hidden file input for gallery */}
           <input
             ref={fileInputRef}
             type="file"
@@ -188,10 +259,10 @@ export function FoodScanner({
                 Prends en photo ou choisis une image de ton plat
               </p>
 
-              {/* Single button — OS will offer camera or gallery */}
+              {/* Camera button — opens in-app camera */}
               <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
+                onClick={openCamera}
                 className="w-24 h-24 rounded-full bg-accent flex items-center justify-center active:scale-95 transition-transform"
               >
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-dark">
@@ -200,7 +271,13 @@ export function FoodScanner({
                 </svg>
               </button>
 
-              <p className="text-xs text-text-secondary">Appareil photo ou galerie</p>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="text-sm text-accent font-medium"
+              >
+                Choisir depuis la galerie
+              </button>
 
               {error && (
                 <div className="flex flex-col items-center gap-2">
@@ -210,6 +287,38 @@ export function FoodScanner({
                   </Button>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Screen: In-app camera */}
+          {screen === 'camera' && (
+            <div className="flex flex-col items-center gap-4">
+              <div className="w-full aspect-[4/3] rounded-card overflow-hidden bg-black relative">
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="flex items-center gap-4">
+                <button
+                  type="button"
+                  onClick={handleRetry}
+                  className="px-4 py-2 text-sm text-text-secondary"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  onClick={capturePhoto}
+                  className="w-16 h-16 rounded-full bg-accent flex items-center justify-center active:scale-95 transition-transform"
+                >
+                  <div className="w-12 h-12 rounded-full border-4 border-dark" />
+                </button>
+                <div className="w-[72px]" />
+              </div>
             </div>
           )}
 
@@ -225,7 +334,7 @@ export function FoodScanner({
                   />
                 </div>
               )}
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+              <div className={`${imageBase64 ? 'absolute inset-0' : ''} flex flex-col items-center justify-center gap-3`}>
                 <div className="w-10 h-10 border-4 border-accent border-t-transparent rounded-full animate-spin" />
                 <p className="text-text-primary font-semibold">Analyse en cours...</p>
               </div>
@@ -235,7 +344,6 @@ export function FoodScanner({
           {/* Screen 3: Result */}
           {screen === 'result' && analysis && (
             <div className="flex flex-col gap-4">
-              {/* Image preview */}
               {imageBase64 && (
                 <div className="w-full h-36 rounded-card overflow-hidden">
                   <img
@@ -246,7 +354,6 @@ export function FoodScanner({
                 </div>
               )}
 
-              {/* Food name + confidence */}
               <div className="flex items-center gap-3">
                 <h2 className="text-xl font-bold flex-1">{analysis.food_name}</h2>
                 <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
@@ -261,54 +368,26 @@ export function FoodScanner({
                 </span>
               </div>
 
-              {/* Low confidence warning */}
               {analysis.confidence === 'low' && (
                 <div className="bg-red-500/10 border border-red-500/30 rounded-card p-3 flex flex-col gap-3">
                   <p className="text-red-400 text-xs">
-                    L'identification est incertaine. Tu peux corriger le nom et les calories ci-dessous.
+                    L'identification est incertaine. Tu peux corriger ci-dessous.
                   </p>
-                  <Input
-                    id="edit-name"
-                    label="Nom de l'aliment"
-                    value={editedName}
-                    onChange={(e) => setEditedName(e.target.value)}
-                  />
-                  <Input
-                    id="edit-cal"
-                    label="Calories / 100g"
-                    type="number"
-                    inputMode="numeric"
-                    suffix="kcal"
-                    value={editedCalories}
-                    onChange={(e) => setEditedCalories(e.target.value)}
-                  />
+                  <Input id="edit-name" label="Nom de l'aliment" value={editedName} onChange={(e) => setEditedName(e.target.value)} />
+                  <Input id="edit-cal" label="Calories / 100g" type="number" inputMode="numeric" suffix="kcal" value={editedCalories} onChange={(e) => setEditedCalories(e.target.value)} />
                 </div>
               )}
 
-              {/* Nutritional info per 100g */}
               <Card className="p-4">
                 <p className="text-xs text-text-secondary mb-3">Valeurs pour 100g</p>
                 <div className="grid grid-cols-4 gap-2 text-center">
-                  <div>
-                    <p className="text-sm font-bold text-accent">{analysis.calories_per_100g}</p>
-                    <p className="text-[10px] text-text-secondary">kcal</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-text-primary">{analysis.proteins_per_100g}g</p>
-                    <p className="text-[10px] text-text-secondary">Prot.</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-text-primary">{analysis.carbs_per_100g}g</p>
-                    <p className="text-[10px] text-text-secondary">Gluc.</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-text-primary">{analysis.fats_per_100g}g</p>
-                    <p className="text-[10px] text-text-secondary">Lip.</p>
-                  </div>
+                  <div><p className="text-sm font-bold text-accent">{analysis.calories_per_100g}</p><p className="text-[10px] text-text-secondary">kcal</p></div>
+                  <div><p className="text-sm font-bold text-text-primary">{analysis.proteins_per_100g}g</p><p className="text-[10px] text-text-secondary">Prot.</p></div>
+                  <div><p className="text-sm font-bold text-text-primary">{analysis.carbs_per_100g}g</p><p className="text-[10px] text-text-secondary">Gluc.</p></div>
+                  <div><p className="text-sm font-bold text-text-primary">{analysis.fats_per_100g}g</p><p className="text-[10px] text-text-secondary">Lip.</p></div>
                 </div>
               </Card>
 
-              {/* Recommendation */}
               <Card className="p-4 border border-accent/20">
                 <p className="text-sm text-text-secondary mb-1">Budget restant</p>
                 <p className="text-lg font-bold text-accent">{caloriesRestantes} kcal</p>
@@ -317,48 +396,18 @@ export function FoodScanner({
                 </p>
               </Card>
 
-              {/* Quantity slider */}
               <div>
                 <p className="text-sm text-text-secondary mb-2">Quantite souhaitee</p>
-                <Slider
-                  min={0}
-                  max={sliderMax}
-                  step={10}
-                  value={quantity}
-                  onChange={setQuantity}
-                  unit="g"
-                />
+                <Slider min={0} max={sliderMax} step={10} value={quantity} onChange={setQuantity} unit="g" />
               </div>
 
-              {/* Dynamic macro display for chosen quantity */}
               <div className="grid grid-cols-4 gap-2 text-center">
-                <div>
-                  <p className="text-sm font-bold text-accent">
-                    {Math.round(calPer100 * ratio)}
-                  </p>
-                  <p className="text-[10px] text-text-secondary">kcal</p>
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-text-primary">
-                    {Math.round(analysis.proteins_per_100g * ratio)}g
-                  </p>
-                  <p className="text-[10px] text-text-secondary">Prot.</p>
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-text-primary">
-                    {Math.round(analysis.carbs_per_100g * ratio)}g
-                  </p>
-                  <p className="text-[10px] text-text-secondary">Gluc.</p>
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-text-primary">
-                    {Math.round(analysis.fats_per_100g * ratio)}g
-                  </p>
-                  <p className="text-[10px] text-text-secondary">Lip.</p>
-                </div>
+                <div><p className="text-sm font-bold text-accent">{Math.round(calPer100 * ratio)}</p><p className="text-[10px] text-text-secondary">kcal</p></div>
+                <div><p className="text-sm font-bold text-text-primary">{Math.round(analysis.proteins_per_100g * ratio)}g</p><p className="text-[10px] text-text-secondary">Prot.</p></div>
+                <div><p className="text-sm font-bold text-text-primary">{Math.round(analysis.carbs_per_100g * ratio)}g</p><p className="text-[10px] text-text-secondary">Gluc.</p></div>
+                <div><p className="text-sm font-bold text-text-primary">{Math.round(analysis.fats_per_100g * ratio)}g</p><p className="text-[10px] text-text-secondary">Lip.</p></div>
               </div>
 
-              {/* Meal type chips */}
               <div>
                 <p className="text-sm text-text-secondary mb-2">Type de repas</p>
                 <div className="flex gap-2 overflow-x-auto pb-1">
@@ -380,16 +429,9 @@ export function FoodScanner({
                 </div>
               </div>
 
-              {saveError && (
-                <p className="text-danger text-sm text-center">{saveError}</p>
-              )}
+              {saveError && <p className="text-danger text-sm text-center">{saveError}</p>}
 
-              <Button
-                variant="primary"
-                className="w-full"
-                onClick={handleSave}
-                disabled={submitting || quantity === 0}
-              >
+              <Button variant="primary" className="w-full" onClick={handleSave} disabled={submitting || quantity === 0}>
                 {submitting ? 'Enregistrement...' : 'Enregistrer ce repas'}
               </Button>
             </div>
