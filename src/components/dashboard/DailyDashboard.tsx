@@ -214,7 +214,7 @@ export function DailyDashboard({
         <AddMealModal
           planId={plan.id}
           budget={plan.calorie_budget}
-          totalCaloriesToday={totalCaloriesToday}
+          meals={meals}
           onSave={onAddMeal}
           onClose={() => setShowAddMeal(false)}
         />
@@ -225,7 +225,7 @@ export function DailyDashboard({
         <FoodScanner
           planId={plan.id}
           budget={plan.calorie_budget}
-          totalCaloriesToday={totalCaloriesToday}
+          meals={meals}
           onAddMeal={onAddMeal}
           onClose={closeScanner}
         />

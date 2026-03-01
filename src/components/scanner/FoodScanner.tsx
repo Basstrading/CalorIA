@@ -5,6 +5,8 @@ import { Input } from '../ui/Input';
 import { Slider } from '../ui/Slider';
 import { fileToBase64 } from '../../lib/image';
 import { analyzeFood } from '../../lib/openrouter';
+import { calculateSmartPortion } from '../../lib/calories';
+import type { PortionRecommendation } from '../../lib/calories';
 import type { FoodAnalysis, Meal } from '../../types';
 
 type MealType = Meal['meal_type'];
@@ -21,7 +23,7 @@ const MEAL_TYPES: { value: MealType; label: string; emoji: string }[] = [
 interface FoodScannerProps {
   planId: string;
   budget: number;
-  totalCaloriesToday: number;
+  meals: Meal[];
   onAddMeal: (data: Omit<Meal, 'id' | 'user_id' | 'created_at'>) => Promise<boolean>;
   onClose: () => void;
 }
@@ -29,7 +31,7 @@ interface FoodScannerProps {
 export function FoodScanner({
   planId,
   budget,
-  totalCaloriesToday,
+  meals,
   onAddMeal,
   onClose,
 }: FoodScannerProps) {
@@ -51,6 +53,7 @@ export function FoodScanner({
   const [quantity, setQuantity] = useState(100);
   const [submitting, setSubmitting] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [portionReco, setPortionReco] = useState<PortionRecommendation | null>(null);
 
   // Stop camera stream on unmount
   const stopCamera = useCallback(() => {
@@ -72,17 +75,43 @@ export function FoodScanner({
       setEditedName(result.food_name);
       setEditedCalories(String(result.calories_per_100g));
 
-      const caloriesRestantes = Math.max(0, budget - totalCaloriesToday);
-      const grammesMax = result.calories_per_100g > 0
-        ? Math.round((caloriesRestantes / result.calories_per_100g) * 100)
-        : 100;
-      setQuantity(Math.max(10, Math.min(grammesMax, 1000)));
+      const reco = calculateSmartPortion({
+        foodName: result.food_name,
+        caloriesPer100g: result.calories_per_100g,
+        proteinsPer100g: result.proteins_per_100g,
+        carbsPer100g: result.carbs_per_100g,
+        fatsPer100g: result.fats_per_100g,
+        foodCategory: result.food_category,
+        mealType,
+        totalDailyBudget: budget,
+        meals,
+      });
+      setPortionReco(reco);
+      setQuantity(reco.recommendedGrams > 0 ? reco.recommendedGrams : 100);
       setScreen('result');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur lors de l\'analyse. Reessaie.');
       setScreen('capture');
     }
   };
+
+  // Recalculate recommendation when mealType changes
+  useEffect(() => {
+    if (!analysis) return;
+    const reco = calculateSmartPortion({
+      foodName: analysis.food_name,
+      caloriesPer100g: analysis.calories_per_100g,
+      proteinsPer100g: analysis.proteins_per_100g,
+      carbsPer100g: analysis.carbs_per_100g,
+      fatsPer100g: analysis.fats_per_100g,
+      foodCategory: analysis.food_category,
+      mealType,
+      totalDailyBudget: budget,
+      meals,
+    });
+    setPortionReco(reco);
+    setQuantity(reco.recommendedGrams > 0 ? reco.recommendedGrams : 100);
+  }, [mealType, analysis, budget, meals]);
 
   // Gallery file input handler
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -209,11 +238,7 @@ export function FoodScanner({
       ? (parseFloat(editedCalories) || analysis.calories_per_100g)
       : analysis.calories_per_100g)
     : 0;
-  const caloriesRestantes = Math.max(0, budget - totalCaloriesToday);
-  const grammesMax = calPer100 > 0
-    ? Math.round((caloriesRestantes / calPer100) * 100)
-    : 100;
-  const sliderMax = Math.max(Math.round(grammesMax * 1.5), 100);
+  const sliderMax = Math.max((portionReco?.recommendedGrams ?? 100) * 3, 200);
   const ratio = quantity / 100;
 
   return (
@@ -388,13 +413,21 @@ export function FoodScanner({
                 </div>
               </Card>
 
-              <Card className="p-4 border border-accent/20">
-                <p className="text-sm text-text-secondary mb-1">Budget restant</p>
-                <p className="text-lg font-bold text-accent">{caloriesRestantes} kcal</p>
-                <p className="text-sm mt-2">
-                  Tu peux manger jusqu'a <span className="font-bold text-accent">{grammesMax}g</span>
-                </p>
-              </Card>
+              {portionReco && (
+                <Card className="p-4 border border-accent/20">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm text-text-secondary">Budget du repas</p>
+                    <p className="text-sm font-semibold">
+                      <span className="text-accent">{portionReco.mealRemaining}</span>
+                      <span className="text-text-secondary"> / {portionReco.mealBudget} kcal</span>
+                    </p>
+                  </div>
+                  <p className="text-lg font-bold text-accent mb-1">
+                    Portion conseillee : {portionReco.recommendedGrams}g
+                  </p>
+                  <p className="text-sm text-text-secondary">{portionReco.coachMessage}</p>
+                </Card>
+              )}
 
               <div>
                 <p className="text-sm text-text-secondary mb-2">Quantite souhaitee</p>

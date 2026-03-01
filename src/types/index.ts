@@ -1,5 +1,16 @@
 export type Goal = 'lose_weight' | 'gain_muscle' | 'maintain';
 
+export type FoodCategory =
+  | 'complete_dish'
+  | 'protein'
+  | 'starch'
+  | 'vegetable'
+  | 'dairy'
+  | 'fruit'
+  | 'snack'
+  | 'drink'
+  | 'sauce_condiment';
+
 export interface UserProfile {
   id: string;
   sex: 'M' | 'F';
@@ -54,6 +65,7 @@ export interface FoodAnalysis {
   carbs_per_100g: number;
   fats_per_100g: number;
   confidence: 'high' | 'medium' | 'low';
+  food_category: FoodCategory;
 }
 
 export interface RecipeSuggestion {

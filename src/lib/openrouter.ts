@@ -12,10 +12,21 @@ Reponds UNIQUEMENT avec un objet JSON (sans backticks, sans texte autour) au for
   "proteins_per_100g": nombre,
   "carbs_per_100g": nombre,
   "fats_per_100g": nombre,
-  "confidence": "high" | "medium" | "low"
+  "confidence": "high" | "medium" | "low",
+  "food_category": "complete_dish" | "protein" | "starch" | "vegetable" | "dairy" | "fruit" | "snack" | "drink" | "sauce_condiment"
 }
 - Les valeurs nutritionnelles sont pour 100g.
 - "confidence" indique ta certitude sur l'identification : "high" si tu es sur, "medium" si probable, "low" si incertain.
+- "food_category" indique la categorie de l'aliment :
+  - "complete_dish" : plat complet (ex: couscous, pizza, lasagne, salade composee)
+  - "protein" : source de proteines (ex: poulet, boeuf, poisson, oeufs, tofu)
+  - "starch" : feculent/glucides (ex: riz, pates, pain, pomme de terre, quinoa)
+  - "vegetable" : legume (ex: brocoli, carotte, salade verte, courgette)
+  - "dairy" : produit laitier (ex: fromage, yaourt, lait)
+  - "fruit" : fruit (ex: pomme, banane, fraises, orange)
+  - "snack" : en-cas/snack (ex: barre cereales, chips, biscuit, chocolat)
+  - "drink" : boisson (ex: jus, soda, smoothie, cafe au lait)
+  - "sauce_condiment" : sauce ou condiment (ex: ketchup, mayonnaise, vinaigrette, huile d'olive)
 - Utilise des valeurs realistes basees sur les tables nutritionnelles standard.`;
 
 const TIMEOUT_MS = 30_000;
@@ -101,6 +112,15 @@ export async function analyzeFood(base64Image: string): Promise<FoodAnalysis> {
   // Normalize confidence
   if (!['high', 'medium', 'low'].includes(parsed.confidence)) {
     parsed.confidence = 'low';
+  }
+
+  // Normalize food_category
+  const VALID_CATEGORIES = [
+    'complete_dish', 'protein', 'starch', 'vegetable', 'dairy',
+    'fruit', 'snack', 'drink', 'sauce_condiment',
+  ];
+  if (!VALID_CATEGORIES.includes(parsed.food_category)) {
+    parsed.food_category = 'complete_dish';
   }
 
   return parsed;

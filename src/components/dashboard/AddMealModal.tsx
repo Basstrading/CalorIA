@@ -1,7 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
 import { Input } from '../ui/Input';
 import { FoodAutocomplete } from '../food/FoodAutocomplete';
+import { calculateSmartPortion, inferFoodCategory } from '../../lib/calories';
+import type { PortionRecommendation } from '../../lib/calories';
 import type { FoodDatabaseEntry, Meal } from '../../types';
 
 type MealType = Meal['meal_type'];
@@ -17,12 +20,12 @@ const MEAL_TYPES: { value: MealType; label: string; emoji: string }[] = [
 interface AddMealModalProps {
   planId: string;
   budget: number;
-  totalCaloriesToday: number;
+  meals: Meal[];
   onSave: (data: Omit<Meal, 'id' | 'user_id' | 'created_at'>) => Promise<boolean>;
   onClose: () => void;
 }
 
-export function AddMealModal({ planId, budget, totalCaloriesToday, onSave, onClose }: AddMealModalProps) {
+export function AddMealModal({ planId, budget, meals, onSave, onClose }: AddMealModalProps) {
   const [mealType, setMealType] = useState<MealType>('lunch');
   const [foodName, setFoodName] = useState('');
   const [calories, setCalories] = useState('');
@@ -35,6 +38,7 @@ export function AddMealModal({ planId, budget, totalCaloriesToday, onSave, onClo
 
   // Track selected food for proportional recalculation
   const [selectedFood, setSelectedFood] = useState<FoodDatabaseEntry | null>(null);
+  const [portionReco, setPortionReco] = useState<PortionRecommendation | null>(null);
 
   const handleFoodSelect = (entry: FoodDatabaseEntry) => {
     setSelectedFood(entry);
@@ -42,7 +46,32 @@ export function AddMealModal({ planId, budget, totalCaloriesToday, onSave, onClo
     setProteins(String(entry.proteins_per_100g));
     setCarbs(String(entry.carbs_per_100g));
     setFats(String(entry.fats_per_100g));
-    setQuantity('100');
+
+    const category = inferFoodCategory(
+      entry.name, entry.calories_per_100g,
+      entry.proteins_per_100g, entry.carbs_per_100g, entry.fats_per_100g,
+    );
+    const reco = calculateSmartPortion({
+      foodName: entry.name,
+      caloriesPer100g: entry.calories_per_100g,
+      proteinsPer100g: entry.proteins_per_100g,
+      carbsPer100g: entry.carbs_per_100g,
+      fatsPer100g: entry.fats_per_100g,
+      foodCategory: category,
+      mealType,
+      totalDailyBudget: budget,
+      meals,
+    });
+    setPortionReco(reco);
+    setQuantity(String(reco.recommendedGrams > 0 ? reco.recommendedGrams : 100));
+
+    // Recalculate macros for recommended quantity
+    const qty = reco.recommendedGrams > 0 ? reco.recommendedGrams : 100;
+    const ratio = qty / 100;
+    setCalories(String(Math.round(entry.calories_per_100g * ratio)));
+    setProteins(String(Math.round(entry.proteins_per_100g * ratio * 10) / 10));
+    setCarbs(String(Math.round(entry.carbs_per_100g * ratio * 10) / 10));
+    setFats(String(Math.round(entry.fats_per_100g * ratio * 10) / 10));
   };
 
   const handleQuantityChange = (val: string) => {
@@ -66,7 +95,36 @@ export function AddMealModal({ planId, budget, totalCaloriesToday, onSave, onClo
     setter(val);
     // Detach auto-calculation when user manually edits a nutritional field
     setSelectedFood(null);
+    setPortionReco(null);
   };
+
+  // Recalculate recommendation when mealType changes
+  useEffect(() => {
+    if (!selectedFood) return;
+    const category = inferFoodCategory(
+      selectedFood.name, selectedFood.calories_per_100g,
+      selectedFood.proteins_per_100g, selectedFood.carbs_per_100g, selectedFood.fats_per_100g,
+    );
+    const reco = calculateSmartPortion({
+      foodName: selectedFood.name,
+      caloriesPer100g: selectedFood.calories_per_100g,
+      proteinsPer100g: selectedFood.proteins_per_100g,
+      carbsPer100g: selectedFood.carbs_per_100g,
+      fatsPer100g: selectedFood.fats_per_100g,
+      foodCategory: category,
+      mealType,
+      totalDailyBudget: budget,
+      meals,
+    });
+    setPortionReco(reco);
+    setQuantity(String(reco.recommendedGrams > 0 ? reco.recommendedGrams : 100));
+    const qty = reco.recommendedGrams > 0 ? reco.recommendedGrams : 100;
+    const ratio = qty / 100;
+    setCalories(String(Math.round(selectedFood.calories_per_100g * ratio)));
+    setProteins(String(Math.round(selectedFood.proteins_per_100g * ratio * 10) / 10));
+    setCarbs(String(Math.round(selectedFood.carbs_per_100g * ratio * 10) / 10));
+    setFats(String(Math.round(selectedFood.fats_per_100g * ratio * 10) / 10));
+  }, [mealType, selectedFood, budget, meals]);
 
   const handleSave = async () => {
     setError(null);
@@ -193,20 +251,22 @@ export function AddMealModal({ planId, budget, totalCaloriesToday, onSave, onClo
             />
           </div>
 
-          {/* Portion recommendation */}
-          {selectedFood && selectedFood.calories_per_100g > 0 && (() => {
-            const caloriesRestantes = Math.max(0, budget - totalCaloriesToday);
-            const grammesMax = Math.round((caloriesRestantes / selectedFood.calories_per_100g) * 100);
-            return (
-              <div className="bg-accent-soft border border-accent/20 rounded-card px-4 py-3">
-                <p className="text-sm text-text-secondary mb-1">Budget restant</p>
-                <p className="text-lg font-bold text-accent">{caloriesRestantes} kcal</p>
-                <p className="text-sm mt-2">
-                  Tu peux manger jusqu'a <span className="font-bold text-accent">{grammesMax}g</span> de {selectedFood.name}
+          {/* Coach recommendation */}
+          {portionReco && selectedFood && (
+            <Card className="p-4 border border-accent/20">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm text-text-secondary">Budget du repas</p>
+                <p className="text-sm font-semibold">
+                  <span className="text-accent">{portionReco.mealRemaining}</span>
+                  <span className="text-text-secondary"> / {portionReco.mealBudget} kcal</span>
                 </p>
               </div>
-            );
-          })()}
+              <p className="text-lg font-bold text-accent mb-1">
+                Portion conseillee : {portionReco.recommendedGrams}g
+              </p>
+              <p className="text-sm text-text-secondary">{portionReco.coachMessage}</p>
+            </Card>
+          )}
 
           <div className="grid grid-cols-3 gap-3">
             <Input
