@@ -57,8 +57,7 @@ export function useProfile(user: User | null) {
     const bmr = calculateBMR(merged.sex, merged.weight, merged.height, merged.age);
     const { error } = await supabase
       .from('profiles')
-      .upsert({
-        id: user.id,
+      .update({
         sex: merged.sex,
         age: merged.age,
         weight: merged.weight,
@@ -66,7 +65,8 @@ export function useProfile(user: User | null) {
         activity_profile: merged.activity_profile,
         goal: merged.goal,
         bmr,
-      });
+      })
+      .eq('id', user.id);
 
     if (!error) {
       await getProfile();

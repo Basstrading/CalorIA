@@ -53,8 +53,10 @@ ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE daily_plans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE meals ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "profiles_self" ON profiles
-  FOR ALL USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
+CREATE POLICY "profiles_select" ON profiles FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "profiles_insert" ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
+CREATE POLICY "profiles_update" ON profiles FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
+CREATE POLICY "profiles_delete" ON profiles FOR DELETE USING (auth.uid() = id);
 
 CREATE POLICY "plans_self" ON daily_plans
   FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
