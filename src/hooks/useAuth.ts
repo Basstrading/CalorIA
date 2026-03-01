@@ -24,9 +24,11 @@ export function useAuth() {
 
   const signUp = useCallback(async (email: string, password: string) => {
     setError(null);
-    const { error: err } = await supabase.auth.signUp({ email, password });
-    if (err) setError(err.message);
-    return !err;
+    const { data, error: err } = await supabase.auth.signUp({ email, password });
+    if (err) { setError(err.message); return 'error' as const; }
+    // If email confirmation is enabled, session is null until confirmed
+    if (data.user && !data.session) return 'confirm_email' as const;
+    return 'ok' as const;
   }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
