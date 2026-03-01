@@ -196,6 +196,8 @@ export function DailyDashboard({
       {showAddMeal && (
         <AddMealModal
           planId={plan.id}
+          budget={plan.calorie_budget}
+          totalCaloriesToday={totalCaloriesToday}
           onSave={onAddMeal}
           onClose={() => setShowAddMeal(false)}
         />

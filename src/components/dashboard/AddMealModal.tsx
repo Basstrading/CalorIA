@@ -16,11 +16,13 @@ const MEAL_TYPES: { value: MealType; label: string; emoji: string }[] = [
 
 interface AddMealModalProps {
   planId: string;
+  budget: number;
+  totalCaloriesToday: number;
   onSave: (data: Omit<Meal, 'id' | 'user_id' | 'created_at'>) => Promise<boolean>;
   onClose: () => void;
 }
 
-export function AddMealModal({ planId, onSave, onClose }: AddMealModalProps) {
+export function AddMealModal({ planId, budget, totalCaloriesToday, onSave, onClose }: AddMealModalProps) {
   const [mealType, setMealType] = useState<MealType>('lunch');
   const [foodName, setFoodName] = useState('');
   const [calories, setCalories] = useState('');
@@ -190,6 +192,21 @@ export function AddMealModal({ planId, onSave, onClose }: AddMealModalProps) {
               onChange={(e) => handleQuantityChange(e.target.value)}
             />
           </div>
+
+          {/* Portion recommendation */}
+          {selectedFood && selectedFood.calories_per_100g > 0 && (() => {
+            const caloriesRestantes = Math.max(0, budget - totalCaloriesToday);
+            const grammesMax = Math.round((caloriesRestantes / selectedFood.calories_per_100g) * 100);
+            return (
+              <div className="bg-accent-soft border border-accent/20 rounded-card px-4 py-3">
+                <p className="text-sm text-text-secondary mb-1">Budget restant</p>
+                <p className="text-lg font-bold text-accent">{caloriesRestantes} kcal</p>
+                <p className="text-sm mt-2">
+                  Tu peux manger jusqu'a <span className="font-bold text-accent">{grammesMax}g</span> de {selectedFood.name}
+                </p>
+              </div>
+            );
+          })()}
 
           <div className="grid grid-cols-3 gap-3">
             <Input
