@@ -1,4 +1,4 @@
-import type { FoodAnalysis, Meal, RecipeSuggestion } from '../types';
+import type { FoodAnalysis, Goal, Meal, RecipeSuggestion } from '../types';
 
 // TODO: Move API key to backend for production — exposing it in the client is insecure
 const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY as string;
@@ -108,17 +108,75 @@ export async function analyzeFood(base64Image: string): Promise<FoodAnalysis> {
 
 const MEAL_TYPES_FR: Record<Meal['meal_type'], string> = {
   breakfast: 'petit-dejeuner',
+  collation_am: 'collation du matin',
   lunch: 'dejeuner',
+  collation_pm: 'collation de l\'apres-midi',
   dinner: 'diner',
-  snack: 'collation/snack',
 };
 
+export interface CoachContext {
+  goal: Goal;
+  weight: number;
+  height: number;
+  sex: 'M' | 'F';
+  totalDailyBudget: number;
+  availableCalories: number;
+  mealType: Meal['meal_type'];
+}
+
+function getGoalStrategy(goal: Goal): string {
+  switch (goal) {
+    case 'lose_weight':
+      return `OBJECTIF : PERTE DE POIDS
+- Strategie : deficit calorique maitrise, haute densite nutritionnelle
+- Ratios macro : 30-35% proteines, 35-40% glucides, 25-30% lipides
+- Privilegier : fibres, proteines maigres, legumes volumineux, aliments a faible densite calorique
+- Eviter : sucres rapides, aliments ultra-transformes, calories vides
+- Chaque repas doit etre rassasiant malgre le deficit`;
+    case 'gain_muscle':
+      return `OBJECTIF : PRISE DE MUSCLE
+- Strategie : surplus calorique controle, proteines elevees (min 1.6g/kg de poids)
+- Ratios macro : 25-30% proteines, 45-50% glucides, 20-25% lipides
+- Privilegier : proteines completes, glucides complexes, bonnes graisses
+- Timing : glucides autour de l'entrainement, proteines a chaque repas
+- Les repas doivent soutenir la recuperation et la croissance musculaire`;
+    case 'maintain':
+    default:
+      return `OBJECTIF : MAINTIEN DU POIDS
+- Strategie : equilibre nutritionnel, variete alimentaire
+- Ratios macro : 25% proteines, 45-50% glucides, 25-30% lipides
+- Privilegier : diversite des sources, plaisir alimentaire, aliments complets
+- Les repas doivent etre equilibres et agreables`;
+  }
+}
+
 export async function getRecipeSuggestions(
-  availableCalories: number,
-  mealType: Meal['meal_type'],
+  context: CoachContext,
 ): Promise<RecipeSuggestion[]> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+  const sexLabel = context.sex === 'M' ? 'Homme' : 'Femme';
+  const goalStrategy = getGoalStrategy(context.goal);
+  const mealLabel = MEAL_TYPES_FR[context.mealType];
+
+  const systemPrompt = `Tu es un coach nutritionniste d'elite, specialise en nutrition sportive et gestion du poids.
+Tu elabores des plans alimentaires personnalises avec precision.
+
+PROFIL CLIENT :
+- Sexe : ${sexLabel}
+- Poids : ${context.weight} kg
+- Taille : ${context.height} cm
+- Budget calorique total journalier : ${context.totalDailyBudget} kcal
+
+${goalStrategy}
+
+REGLES STRICTES :
+- Chaque suggestion doit totaliser environ ${context.availableCalories} kcal (tolerance +/- 10%)
+- Indique les quantites precises en grammes pour chaque ingredient
+- Les macros (proteines, glucides, lipides) doivent respecter les ratios ci-dessus
+- Propose des repas realistes, faciles a preparer, avec des ingredients courants
+- Descriptions courtes et motivantes (1 phrase)`;
 
   let response: Response;
   try {
@@ -134,27 +192,26 @@ export async function getRecipeSuggestions(
       body: JSON.stringify({
         model: 'google/gemini-2.0-flash-001',
         messages: [
+          { role: 'system', content: systemPrompt },
           {
             role: 'user',
-            content: `Tu es un nutritionniste francais. L'utilisateur a ${availableCalories} kcal disponibles pour son ${MEAL_TYPES_FR[mealType]}.
-
-Propose exactement 3 idees de repas simples, equilibres et realistes qui totalisent chacun environ ${availableCalories} kcal.
+            content: `Propose exactement 3 idees pour mon ${mealLabel} avec ${context.availableCalories} kcal disponibles.
 
 Reponds UNIQUEMENT avec un JSON valide, sans markdown, sans backticks :
 [
   {
     "name": "Nom du repas",
-    "description": "Description courte et appetissante (1 phrase)",
+    "description": "Description courte et motivante (1 phrase)",
     "calories": nombre entier,
-    "proteins": nombre entier,
-    "carbs": nombre entier,
-    "fats": nombre entier,
-    "ingredients": ["ingredient 1", "ingredient 2", "..."]
+    "proteins": nombre entier en grammes,
+    "carbs": nombre entier en grammes,
+    "fats": nombre entier en grammes,
+    "ingredients": ["ingredient 1 (quantite en g)", "ingredient 2 (quantite en g)", "..."]
   }
 ]`,
           },
         ],
-        max_tokens: 800,
+        max_tokens: 1200,
         temperature: 0.7,
       }),
     });

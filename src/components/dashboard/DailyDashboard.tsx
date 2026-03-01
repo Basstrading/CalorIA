@@ -26,9 +26,10 @@ const SPLIT_CONFIG: {
   emoji: string;
 }[] = [
   { key: 'breakfast', label: 'Petit-dej', emoji: '\u{2615}' },
+  { key: 'collation_am', label: 'Collation AM', emoji: '\u{1F34C}' },
   { key: 'lunch', label: 'Dejeuner', emoji: '\u{1F37D}' },
+  { key: 'collation_pm', label: 'Collation PM', emoji: '\u{1F34E}' },
   { key: 'dinner', label: 'Diner', emoji: '\u{1F319}' },
-  { key: 'snack', label: 'Snacks', emoji: '\u{1F34E}' },
 ];
 
 function formatFrenchDate(): string {
@@ -40,6 +41,7 @@ function formatFrenchDate(): string {
 }
 
 export function DailyDashboard({
+  profile,
   plan,
   meals,
   totalCaloriesToday,
@@ -59,7 +61,7 @@ export function DailyDashboard({
   // Calories consumed per meal type
   const consumedByType = useMemo(() => {
     const result: Record<Meal['meal_type'], number> = {
-      breakfast: 0, lunch: 0, dinner: 0, snack: 0,
+      breakfast: 0, collation_am: 0, lunch: 0, collation_pm: 0, dinner: 0,
     };
     for (const m of meals) {
       result[m.meal_type] += m.calories;
@@ -185,6 +187,7 @@ export function DailyDashboard({
           planId={plan.id}
           budget={plan.calorie_budget}
           meals={meals}
+          profile={profile}
           onAddMeal={onAddMeal}
           onClose={() => setShowRecipes(false)}
         />

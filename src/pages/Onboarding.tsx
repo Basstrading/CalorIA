@@ -4,10 +4,17 @@ import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { Toggle } from '../components/ui/Toggle';
 import type { ProfileInput } from '../hooks/useProfile';
+import type { Goal } from '../types';
 
 interface OnboardingProps {
   onComplete: (data: ProfileInput) => Promise<boolean>;
 }
+
+const GOAL_OPTIONS: { value: Goal; label: string; description: string }[] = [
+  { value: 'lose_weight', label: 'Perdre du poids', description: 'Deficit calorique de 500 kcal/jour' },
+  { value: 'maintain', label: 'Maintenir', description: 'Garder ton poids actuel' },
+  { value: 'gain_muscle', label: 'Prendre du muscle', description: 'Surplus calorique de 300 kcal/jour' },
+];
 
 export function Onboarding({ onComplete }: OnboardingProps) {
   const [sex, setSex] = useState<'M' | 'F'>('M');
@@ -15,13 +22,23 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const [weight, setWeight] = useState('');
   const [height, setHeight] = useState('');
   const [activityProfile, setActivityProfile] = useState<'sportif' | 'peu_sportif'>('sportif');
+  const [goal, setGoal] = useState<Goal>('lose_weight');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const heightNum = parseFloat(height);
+  const weightNum = parseFloat(weight);
+  const idealWeight = !isNaN(heightNum) && heightNum > 0
+    ? Math.round(22 * (heightNum / 100) ** 2)
+    : null;
+  const weightDiff = idealWeight !== null && !isNaN(weightNum)
+    ? Math.round(weightNum - idealWeight)
+    : null;
+
   const validate = (): ProfileInput | null => {
     const ageNum = parseInt(age, 10);
-    const weightNum = parseFloat(weight);
-    const heightNum = parseFloat(height);
+    const wNum = parseFloat(weight);
+    const hNum = parseFloat(height);
 
     if (!age || !weight || !height) {
       setError('Tous les champs sont obligatoires');
@@ -31,11 +48,11 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       setError('L\'age doit etre entre 1 et 119 ans');
       return null;
     }
-    if (isNaN(weightNum) || weightNum <= 20 || weightNum >= 300) {
+    if (isNaN(wNum) || wNum <= 20 || wNum >= 300) {
       setError('Le poids doit etre entre 21 et 299 kg');
       return null;
     }
-    if (isNaN(heightNum) || heightNum <= 100 || heightNum >= 250) {
+    if (isNaN(hNum) || hNum <= 100 || hNum >= 250) {
       setError('La taille doit etre entre 101 et 249 cm');
       return null;
     }
@@ -43,9 +60,10 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     return {
       sex,
       age: ageNum,
-      weight: weightNum,
-      height: heightNum,
+      weight: wNum,
+      height: hNum,
       activity_profile: activityProfile,
+      goal,
     };
   };
 
@@ -123,6 +141,56 @@ export function Onboarding({ onComplete }: OnboardingProps) {
             value={height}
             onChange={(e) => setHeight(e.target.value)}
           />
+
+          {/* Poids ideal */}
+          {idealWeight !== null && weightDiff !== null && (
+            <div className="bg-card border border-border rounded-card px-4 py-3 text-sm">
+              <p className="text-text-secondary">
+                Poids ideal (IMC 22) : <span className="font-bold text-text-primary">{idealWeight} kg</span>
+              </p>
+              {weightDiff > 0 && (
+                <p className="text-text-secondary mt-1">
+                  {weightDiff} kg a perdre
+                </p>
+              )}
+              {weightDiff < 0 && (
+                <p className="text-text-secondary mt-1">
+                  {Math.abs(weightDiff)} kg a prendre
+                </p>
+              )}
+              {weightDiff === 0 && (
+                <p className="text-accent mt-1 font-medium">
+                  Tu es a ton poids ideal !
+                </p>
+              )}
+            </div>
+          )}
+        </Card>
+
+        {/* Objectif */}
+        <Card>
+          <p className="text-sm text-text-secondary font-medium mb-3">Mon objectif</p>
+          <div className="flex flex-col gap-2">
+            {GOAL_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setGoal(opt.value)}
+                className={`flex flex-col items-start px-4 py-3 rounded-button text-left transition-all border ${
+                  goal === opt.value
+                    ? 'bg-accent-soft border-accent/40'
+                    : 'bg-card border-border'
+                }`}
+              >
+                <span className={`text-sm font-semibold ${
+                  goal === opt.value ? 'text-text-primary' : 'text-text-secondary'
+                }`}>
+                  {opt.label}
+                </span>
+                <span className="text-xs text-text-secondary mt-0.5">{opt.description}</span>
+              </button>
+            ))}
+          </div>
         </Card>
 
         {/* Profil activite */}

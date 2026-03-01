@@ -10,6 +10,7 @@ CREATE TABLE profiles (
   weight REAL NOT NULL CHECK (weight > 20 AND weight < 300),
   height REAL NOT NULL CHECK (height > 100 AND height < 250),
   activity_profile TEXT NOT NULL CHECK (activity_profile IN ('sportif', 'peu_sportif')),
+  goal TEXT NOT NULL DEFAULT 'maintain' CHECK (goal IN ('lose_weight', 'gain_muscle', 'maintain')),
   bmr REAL NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -31,7 +32,7 @@ CREATE TABLE meals (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   plan_id UUID REFERENCES daily_plans(id) ON DELETE CASCADE,
-  meal_type TEXT NOT NULL CHECK (meal_type IN ('breakfast', 'lunch', 'dinner', 'snack')),
+  meal_type TEXT NOT NULL CHECK (meal_type IN ('breakfast', 'collation_am', 'lunch', 'collation_pm', 'dinner')),
   food_name TEXT NOT NULL,
   calories REAL NOT NULL,
   proteins REAL DEFAULT 0,

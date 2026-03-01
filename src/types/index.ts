@@ -1,3 +1,5 @@
+export type Goal = 'lose_weight' | 'gain_muscle' | 'maintain';
+
 export interface UserProfile {
   id: string;
   sex: 'M' | 'F';
@@ -5,6 +7,7 @@ export interface UserProfile {
   weight: number;
   height: number;
   activity_profile: 'sportif' | 'peu_sportif';
+  goal: Goal;
   bmr: number;
   created_at: string;
 }
@@ -33,7 +36,7 @@ export interface Meal {
   id: string;
   user_id: string;
   plan_id: string;
-  meal_type: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+  meal_type: 'breakfast' | 'collation_am' | 'lunch' | 'collation_pm' | 'dinner';
   food_name: string;
   calories: number;
   proteins: number;

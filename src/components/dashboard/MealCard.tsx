@@ -2,16 +2,18 @@ import type { Meal } from '../../types';
 
 const MEAL_TYPE_LABELS: Record<Meal['meal_type'], string> = {
   breakfast: 'Petit-dej',
+  collation_am: 'Collation AM',
   lunch: 'Dejeuner',
+  collation_pm: 'Collation PM',
   dinner: 'Diner',
-  snack: 'Snack',
 };
 
 const MEAL_TYPE_EMOJIS: Record<Meal['meal_type'], string> = {
   breakfast: '\u{2615}',
+  collation_am: '\u{1F34C}',
   lunch: '\u{1F37D}',
+  collation_pm: '\u{1F34E}',
   dinner: '\u{1F319}',
-  snack: '\u{1F34E}',
 };
 
 interface MealCardProps {

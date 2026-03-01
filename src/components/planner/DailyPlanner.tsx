@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { ActivityChip, ACTIVITIES } from './ActivityChip';
-import { calculateTDEE, MET_VALUES } from '../../lib/calories';
+import { calculateTDEE, calculateCalorieBudget, MET_VALUES } from '../../lib/calories';
 import type { ActivitySet, UserProfile } from '../../types';
 
 interface DailyPlannerProps {
@@ -85,7 +85,17 @@ export function DailyPlanner({ profile, onValidate }: DailyPlannerProps) {
     [profile.bmr, profile.weight, activitySet],
   );
 
-  // Per-activity calorie breakdown
+  // Budget based on goal
+  const budget = useMemo(
+    () => calculateCalorieBudget(tdee, profile.goal),
+    [tdee, profile.goal],
+  );
+
+  const goalLabel = profile.goal === 'lose_weight' ? 'Deficit -500'
+    : profile.goal === 'gain_muscle' ? 'Surplus +300'
+    : 'Maintien';
+
+  // Per-activity calorie breakdown using NET MET (MET - 1)
   const breakdown = useMemo(() => {
     const result: { label: string; kcal: number }[] = [];
     const w = profile.weight;
@@ -100,12 +110,12 @@ export function DailyPlanner({ profile, onValidate }: DailyPlannerProps) {
       let kcal = 0;
       let label = '';
 
-      if (key === 'marche') { kcal = MET_VALUES.marche * w * (val / 60); label = `Marche ${val}min`; }
-      if (key === 'footing') { kcal = MET_VALUES.footing * w * (val / 60); label = `Footing ${val}min`; }
-      if (key === 'musculation') { kcal = MET_VALUES.musculation * w * (val / 60); label = `Musculation ${val}min`; }
-      if (key === 'sport_collectif') { kcal = MET_VALUES.sport_collectif * w * (val / 60); label = `Sport co. ${val}min`; }
-      if (key === 'travail_physique') { kcal = MET_VALUES.travail_physique * w * val; label = `Travail physique ${val}h`; }
-      if (key === 'travail_bureau') { kcal = MET_VALUES.travail_bureau * w * val; label = `Bureau ${val}h`; }
+      if (key === 'marche') { kcal = (MET_VALUES.marche - 1) * w * (val / 60); label = `Marche ${val}min`; }
+      if (key === 'footing') { kcal = (MET_VALUES.footing - 1) * w * (val / 60); label = `Footing ${val}min`; }
+      if (key === 'musculation') { kcal = (MET_VALUES.musculation - 1) * w * (val / 60); label = `Musculation ${val}min`; }
+      if (key === 'sport_collectif') { kcal = (MET_VALUES.sport_collectif - 1) * w * (val / 60); label = `Sport co. ${val}min`; }
+      if (key === 'travail_physique') { kcal = (MET_VALUES.travail_physique - 1) * w * val; label = `Travail physique ${val}h`; }
+      if (key === 'travail_bureau') { kcal = (MET_VALUES.travail_bureau - 1) * w * val; label = `Bureau ${val}h`; }
 
       if (label) result.push({ label, kcal: Math.round(kcal) });
     }
@@ -119,7 +129,7 @@ export function DailyPlanner({ profile, onValidate }: DailyPlannerProps) {
     }
     setError(null);
     setSubmitting(true);
-    const success = await onValidate(activitySet, tdee, tdee);
+    const success = await onValidate(activitySet, tdee, budget);
     if (!success) {
       setError('Erreur lors de la sauvegarde');
     }
@@ -165,14 +175,17 @@ export function DailyPlanner({ profile, onValidate }: DailyPlannerProps) {
         )}
 
         <div className="flex flex-col items-center gap-1">
+          <span className="text-xs text-text-secondary">
+            TDEE : {tdee.toLocaleString('fr-FR')} kcal
+          </span>
           <span
             className="text-4xl font-bold text-accent transition-all duration-500"
-            key={tdee}
+            key={budget}
           >
-            {tdee.toLocaleString('fr-FR')} kcal
+            {budget.toLocaleString('fr-FR')} kcal
           </span>
           <span className="text-sm text-text-secondary">
-            {selected.size > 0 ? "c'est ton budget du jour" : 'BMR au repos'}
+            {selected.size > 0 ? `Budget du jour (${goalLabel})` : 'BMR au repos'}
           </span>
         </div>
       </Card>

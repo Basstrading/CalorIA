@@ -3,21 +3,23 @@ import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { getRecipeSuggestions } from '../../lib/openrouter';
 import { suggestMealSplit } from '../../lib/calories';
-import type { Meal, RecipeSuggestion } from '../../types';
+import type { Meal, RecipeSuggestion, UserProfile } from '../../types';
 
 type MealType = Meal['meal_type'];
 
 const MEAL_TYPES: { value: MealType; label: string; emoji: string }[] = [
   { value: 'breakfast', label: 'Petit-dej', emoji: '\u{2615}' },
+  { value: 'collation_am', label: 'Collation AM', emoji: '\u{1F34C}' },
   { value: 'lunch', label: 'Dejeuner', emoji: '\u{1F37D}' },
+  { value: 'collation_pm', label: 'Collation PM', emoji: '\u{1F34E}' },
   { value: 'dinner', label: 'Diner', emoji: '\u{1F319}' },
-  { value: 'snack', label: 'Snack', emoji: '\u{1F34E}' },
 ];
 
 interface RecipeSuggestionsProps {
   planId: string;
   budget: number;
   meals: Meal[];
+  profile: UserProfile;
   onAddMeal: (data: Omit<Meal, 'id' | 'user_id' | 'created_at'>) => Promise<boolean>;
   onClose: () => void;
 }
@@ -26,6 +28,7 @@ export function RecipeSuggestions({
   planId,
   budget,
   meals,
+  profile,
   onAddMeal,
   onClose,
 }: RecipeSuggestionsProps) {
@@ -51,13 +54,21 @@ export function RecipeSuggestions({
     setLoading(true);
     setSuggestions([]);
     try {
-      const results = await getRecipeSuggestions(availableCalories, mealType);
+      const results = await getRecipeSuggestions({
+        goal: profile.goal,
+        weight: profile.weight,
+        height: profile.height,
+        sex: profile.sex,
+        totalDailyBudget: budget,
+        availableCalories,
+        mealType,
+      });
       setSuggestions(results);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur inconnue');
     }
     setLoading(false);
-  }, [availableCalories, mealType]);
+  }, [availableCalories, mealType, profile, budget]);
 
   useEffect(() => {
     fetchSuggestions();
@@ -95,9 +106,22 @@ export function RecipeSuggestions({
       {/* Full-screen panel */}
       <div className="fixed inset-x-0 bottom-0 z-50 bg-dark rounded-t-[20px] max-h-[92vh] overflow-y-auto animate-slide-up">
         <div className="max-w-md mx-auto p-6 flex flex-col gap-5">
-          {/* Handle */}
-          <div className="flex justify-center">
-            <div className="w-10 h-1 rounded-full bg-border" />
+          {/* Header with back button + handle */}
+          <div className="flex items-center">
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 -ml-2 text-text-secondary hover:text-text-primary transition-colors"
+              aria-label="Retour"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+            </button>
+            <div className="flex-1 flex justify-center">
+              <div className="w-10 h-1 rounded-full bg-border" />
+            </div>
+            <div className="w-9" />
           </div>
 
           <h2 className="text-xl font-bold">Idees de repas</h2>

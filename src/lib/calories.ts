@@ -1,26 +1,26 @@
-import type { ActivitySet } from '../types';
+import type { ActivitySet, Goal } from '../types';
 
 /**
- * Valeurs MET (Metabolic Equivalent of Task) pour chaque activité.
+ * Valeurs MET (Metabolic Equivalent of Task) pour chaque activite.
  * 1 MET = 1 kcal/kg/h au repos.
  * Sources : Compendium of Physical Activities (Ainsworth et al.)
  */
 export const MET_VALUES = {
   marche: 3.5,           // marche rapide ~5 km/h
-  footing: 7.0,          // course modérée ~8 km/h
-  musculation: 6.0,      // entraînement résistance
+  footing: 7.0,          // course moderee ~8 km/h
+  musculation: 6.0,      // entrainement resistance
   sport_collectif: 8.0,  // foot, basket, etc.
   travail_physique: 4.0,  // travail manuel (debout, port de charges)
   travail_bureau: 1.5,    // assis, ordinateur
-  journee_inactive: 1.2,  // repos, canapé, TV
+  journee_inactive: 1.2,  // repos, canape, TV
 } as const;
 
 /**
- * Calcul du métabolisme de base (BMR) via la formule Mifflin-St Jeor.
- * Considérée comme la plus précise pour les adultes en bonne santé.
+ * Calcul du metabolisme de base (BMR) via la formule Mifflin-St Jeor.
+ * Consideree comme la plus precise pour les adultes en bonne sante.
  *
- * Homme : BMR = 10×poids(kg) + 6.25×taille(cm) - 5×âge(ans) + 5
- * Femme : BMR = 10×poids(kg) + 6.25×taille(cm) - 5×âge(ans) - 161
+ * Homme : BMR = 10*poids(kg) + 6.25*taille(cm) - 5*age(ans) + 5
+ * Femme : BMR = 10*poids(kg) + 6.25*taille(cm) - 5*age(ans) - 161
  */
 export function calculateBMR(
   sex: 'M' | 'F',
@@ -35,12 +35,12 @@ export function calculateBMR(
 /**
  * Calcul du TDEE (Total Daily Energy Expenditure) dynamique.
  *
- * Pour chaque activité déclarée, on calcule les calories brûlées :
- *   calories = MET × poids(kg) × durée(heures)
+ * On utilise le MET NET (MET - 1) pour eviter de compter le BMR deux fois.
+ * Le BMR represente deja 1 MET (depense au repos). Chaque activite ajoute
+ * uniquement la depense SUPPLEMENTAIRE :
+ *   calories_nettes = (MET - 1) * poids(kg) * duree(heures)
  *
- * Le TDEE final = BMR + somme des calories brûlées par activité.
- * On utilise le MET brut (pas MET-1) conformément à l'approche
- * grand public des apps fitness.
+ * TDEE = BMR + somme des calories nettes par activite
  */
 export function calculateTDEE(
   bmr: number,
@@ -49,54 +49,74 @@ export function calculateTDEE(
 ): number {
   let activityCalories = 0;
 
-  // Activités en minutes → convertir en heures
-  if (activities.marche) {
-    activityCalories += MET_VALUES.marche * weight * (activities.marche / 60);
-  }
-  if (activities.footing) {
-    activityCalories += MET_VALUES.footing * weight * (activities.footing / 60);
-  }
-  if (activities.musculation) {
-    activityCalories += MET_VALUES.musculation * weight * (activities.musculation / 60);
-  }
-  if (activities.sport_collectif) {
-    activityCalories += MET_VALUES.sport_collectif * weight * (activities.sport_collectif / 60);
-  }
-
-  // Activités en heures (travail)
-  if (activities.travail_physique) {
-    activityCalories += MET_VALUES.travail_physique * weight * activities.travail_physique;
-  }
-  if (activities.travail_bureau) {
-    activityCalories += MET_VALUES.travail_bureau * weight * activities.travail_bureau;
-  }
-
-  // Journée inactive : coefficient multiplicateur simple sur le BMR
+  // Journee inactive : coefficient multiplicateur simple sur le BMR
   if (activities.journee_inactive) {
     return Math.round(bmr * MET_VALUES.journee_inactive);
+  }
+
+  // Activites en minutes -> convertir en heures, MET NET = MET - 1
+  if (activities.marche) {
+    activityCalories += (MET_VALUES.marche - 1) * weight * (activities.marche / 60);
+  }
+  if (activities.footing) {
+    activityCalories += (MET_VALUES.footing - 1) * weight * (activities.footing / 60);
+  }
+  if (activities.musculation) {
+    activityCalories += (MET_VALUES.musculation - 1) * weight * (activities.musculation / 60);
+  }
+  if (activities.sport_collectif) {
+    activityCalories += (MET_VALUES.sport_collectif - 1) * weight * (activities.sport_collectif / 60);
+  }
+
+  // Activites en heures (travail), MET NET = MET - 1
+  if (activities.travail_physique) {
+    activityCalories += (MET_VALUES.travail_physique - 1) * weight * activities.travail_physique;
+  }
+  if (activities.travail_bureau) {
+    activityCalories += (MET_VALUES.travail_bureau - 1) * weight * activities.travail_bureau;
   }
 
   return Math.round(bmr + activityCalories);
 }
 
 /**
- * Répartition suggérée du budget calorique par repas.
- * Basée sur les recommandations nutritionnelles courantes :
- *   - Petit-déjeuner : 25%
- *   - Déjeuner : 35%
- *   - Dîner : 30%
- *   - Snack : 10%
+ * Calcule le budget calorique journalier en fonction de l'objectif.
+ * - Perte de poids : deficit de 500 kcal
+ * - Prise de muscle : surplus de 300 kcal
+ * - Maintien : TDEE tel quel
+ */
+export function calculateCalorieBudget(tdee: number, goal: Goal): number {
+  switch (goal) {
+    case 'lose_weight':
+      return Math.round(tdee - 500);
+    case 'gain_muscle':
+      return Math.round(tdee + 300);
+    case 'maintain':
+    default:
+      return tdee;
+  }
+}
+
+/**
+ * Repartition suggeree du budget calorique par repas (5 types).
+ *   - Petit-dejeuner : 20%
+ *   - Collation matin : 10%
+ *   - Dejeuner : 30%
+ *   - Collation apres-midi : 10%
+ *   - Diner : 30%
  */
 export function suggestMealSplit(totalCalories: number): {
   breakfast: number;
+  collation_am: number;
   lunch: number;
+  collation_pm: number;
   dinner: number;
-  snack: number;
 } {
   return {
-    breakfast: Math.round(totalCalories * 0.25),
-    lunch: Math.round(totalCalories * 0.35),
+    breakfast: Math.round(totalCalories * 0.20),
+    collation_am: Math.round(totalCalories * 0.10),
+    lunch: Math.round(totalCalories * 0.30),
+    collation_pm: Math.round(totalCalories * 0.10),
     dinner: Math.round(totalCalories * 0.30),
-    snack: Math.round(totalCalories * 0.10),
   };
 }
