@@ -104,6 +104,8 @@ function App() {
 
   // Dashboard
   return (
+    <>
+    <InstallPrompt />
     <DailyDashboard
       profile={profile}
       plan={plan}
@@ -115,6 +117,7 @@ function App() {
       onEditProfile={() => setEditingProfile(true)}
       onSignOut={signOut}
     />
+    </>
   );
 }
 
