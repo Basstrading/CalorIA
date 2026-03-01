@@ -1,4 +1,4 @@
-import type { FoodAnalysis } from '../types';
+import type { FoodAnalysis, Meal, RecipeSuggestion } from '../types';
 
 // TODO: Move API key to backend for production — exposing it in the client is insecure
 const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY as string;
@@ -101,6 +101,94 @@ export async function analyzeFood(base64Image: string): Promise<FoodAnalysis> {
   // Normalize confidence
   if (!['high', 'medium', 'low'].includes(parsed.confidence)) {
     parsed.confidence = 'low';
+  }
+
+  return parsed;
+}
+
+const MEAL_TYPES_FR: Record<Meal['meal_type'], string> = {
+  breakfast: 'petit-dejeuner',
+  lunch: 'dejeuner',
+  dinner: 'diner',
+  snack: 'collation/snack',
+};
+
+export async function getRecipeSuggestions(
+  availableCalories: number,
+  mealType: Meal['meal_type'],
+): Promise<RecipeSuggestion[]> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+  let response: Response;
+  try {
+    response = await fetch(OPENROUTER_URL, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'HTTP-Referer': window.location.origin,
+        'X-Title': 'CalorIA',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.0-flash-001',
+        messages: [
+          {
+            role: 'user',
+            content: `Tu es un nutritionniste francais. L'utilisateur a ${availableCalories} kcal disponibles pour son ${MEAL_TYPES_FR[mealType]}.
+
+Propose exactement 3 idees de repas simples, equilibres et realistes qui totalisent chacun environ ${availableCalories} kcal.
+
+Reponds UNIQUEMENT avec un JSON valide, sans markdown, sans backticks :
+[
+  {
+    "name": "Nom du repas",
+    "description": "Description courte et appetissante (1 phrase)",
+    "calories": nombre entier,
+    "proteins": nombre entier,
+    "carbs": nombre entier,
+    "fats": nombre entier,
+    "ingredients": ["ingredient 1", "ingredient 2", "..."]
+  }
+]`,
+          },
+        ],
+        max_tokens: 800,
+        temperature: 0.7,
+      }),
+    });
+  } catch (err) {
+    clearTimeout(timer);
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error('Delai depasse — verifie ta connexion et reessaie.');
+    }
+    throw new Error('Erreur reseau — verifie ta connexion.');
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (!response.ok) {
+    throw new Error(`Erreur API (${response.status}) — reessaie plus tard.`);
+  }
+
+  const data = await response.json();
+  const raw: string | undefined = data?.choices?.[0]?.message?.content;
+  if (!raw) {
+    throw new Error('Reponse inattendue du serveur.');
+  }
+
+  const cleaned = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+
+  let parsed: RecipeSuggestion[];
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch {
+    throw new Error('L\'IA n\'a pas retourne un format valide. Reessaie.');
+  }
+
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    throw new Error('Aucune suggestion recue. Reessaie.');
   }
 
   return parsed;

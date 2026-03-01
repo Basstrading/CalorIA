@@ -5,6 +5,7 @@ import { MealList } from './MealList';
 import { FloatingActionButton } from './FloatingActionButton';
 import { AddMealModal } from './AddMealModal';
 import { FoodScanner } from '../scanner/FoodScanner';
+import { RecipeSuggestions } from '../recipes/RecipeSuggestions';
 import { suggestMealSplit } from '../../lib/calories';
 import type { FabAction } from './FloatingActionButton';
 import type { DailyPlan, Meal, UserProfile } from '../../types';
@@ -48,6 +49,7 @@ export function DailyDashboard({
 }: DailyDashboardProps) {
   const [showAddMeal, setShowAddMeal] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
+  const [showRecipes, setShowRecipes] = useState(false);
 
   const split = useMemo(
     () => suggestMealSplit(plan.calorie_budget),
@@ -70,8 +72,9 @@ export function DailyDashboard({
       setShowAddMeal(true);
     } else if (action === 'scan') {
       setShowScanner(true);
+    } else if (action === 'ideas') {
+      setShowRecipes(true);
     }
-    // ideas: handled in future steps
   };
 
   return (
@@ -173,6 +176,17 @@ export function DailyDashboard({
           totalCaloriesToday={totalCaloriesToday}
           onAddMeal={onAddMeal}
           onClose={() => setShowScanner(false)}
+        />
+      )}
+
+      {/* Recipe suggestions */}
+      {showRecipes && (
+        <RecipeSuggestions
+          planId={plan.id}
+          budget={plan.calorie_budget}
+          meals={meals}
+          onAddMeal={onAddMeal}
+          onClose={() => setShowRecipes(false)}
         />
       )}
     </div>
