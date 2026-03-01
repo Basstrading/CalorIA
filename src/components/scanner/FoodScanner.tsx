@@ -53,10 +53,11 @@ export function FoodScanner({
 
   const handleFileSelected = async (file: File) => {
     setError(null);
+    setScreen('analyzing');
+
     try {
       const base64 = await fileToBase64(file);
       setImageBase64(base64);
-      setScreen('analyzing');
 
       const result = await analyzeFood(base64);
       setAnalysis(result);
@@ -73,7 +74,7 @@ export function FoodScanner({
 
       setScreen('result');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur inconnue');
+      setError(err instanceof Error ? err.message : 'Erreur lors de l\'analyse. Reessaie avec une autre photo.');
       setScreen('capture');
     }
   };

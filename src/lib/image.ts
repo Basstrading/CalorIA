@@ -1,12 +1,19 @@
-const MAX_WIDTH = 1024;
-const MAX_HEIGHT = 1024;
-const JPEG_QUALITY = 0.7;
+const MAX_WIDTH = 768;
+const MAX_HEIGHT = 768;
+const JPEG_QUALITY = 0.6;
 
 function compressImage(file: File): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
+
+    const timeout = setTimeout(() => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Chargement image trop long. Reessaie avec une photo plus legere.'));
+    }, 10_000);
+
     img.onload = () => {
+      clearTimeout(timeout);
       URL.revokeObjectURL(url);
       let { width, height } = img;
 
@@ -24,12 +31,16 @@ function compressImage(file: File): Promise<Blob> {
       ctx.drawImage(img, 0, 0, width, height);
 
       canvas.toBlob(
-        (blob) => blob ? resolve(blob) : reject(new Error('Compression echouee')),
+        (blob) => blob ? resolve(blob) : reject(new Error('Compression echouee. Reessaie avec une photo JPEG.')),
         'image/jpeg',
         JPEG_QUALITY,
       );
     };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image illisible')); };
+    img.onerror = () => {
+      clearTimeout(timeout);
+      URL.revokeObjectURL(url);
+      reject(new Error('Format image non supporte. Prends une photo directement avec l\'appareil.'));
+    };
     img.src = url;
   });
 }
