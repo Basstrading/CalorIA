@@ -48,20 +48,24 @@ export function AddMealModal({ planId, onSave, onClose }: AddMealModalProps) {
     }
 
     setSubmitting(true);
-    const success = await onSave({
-      plan_id: planId,
-      meal_type: mealType,
-      food_name: foodName.trim(),
-      calories: cal,
-      proteins: parseFloat(proteins) || 0,
-      carbs: parseFloat(carbs) || 0,
-      fats: parseFloat(fats) || 0,
-      quantity_grams: qty,
-    });
+    try {
+      const success = await onSave({
+        plan_id: planId,
+        meal_type: mealType,
+        food_name: foodName.trim(),
+        calories: cal,
+        proteins: parseFloat(proteins) || 0,
+        carbs: parseFloat(carbs) || 0,
+        fats: parseFloat(fats) || 0,
+        quantity_grams: qty,
+      });
 
-    if (success) {
-      onClose();
-    } else {
+      if (success) {
+        onClose();
+      } else {
+        setError('Erreur lors de la sauvegarde');
+      }
+    } catch {
       setError('Erreur lors de la sauvegarde');
     }
     setSubmitting(false);

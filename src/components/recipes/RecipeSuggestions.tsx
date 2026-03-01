@@ -65,22 +65,26 @@ export function RecipeSuggestions({
 
   const handleChoose = async (recipe: RecipeSuggestion, index: number) => {
     setSaving(index);
-    const success = await onAddMeal({
-      plan_id: planId,
-      meal_type: mealType,
-      food_name: recipe.name,
-      calories: recipe.calories,
-      proteins: recipe.proteins,
-      carbs: recipe.carbs,
-      fats: recipe.fats,
-      quantity_grams: 0,
-    });
-    if (success) {
-      onClose();
-    } else {
+    try {
+      const success = await onAddMeal({
+        plan_id: planId,
+        meal_type: mealType,
+        food_name: recipe.name,
+        calories: recipe.calories,
+        proteins: recipe.proteins,
+        carbs: recipe.carbs,
+        fats: recipe.fats,
+        quantity_grams: 0,
+      });
+      if (success) {
+        onClose();
+      } else {
+        setError('Erreur lors de la sauvegarde');
+      }
+    } catch {
       setError('Erreur lors de la sauvegarde');
-      setSaving(null);
     }
+    setSaving(null);
   };
 
   return (
@@ -163,7 +167,7 @@ export function RecipeSuggestions({
           {!loading && suggestions.length > 0 && (
             <div className="flex flex-col gap-3">
               {suggestions.map((recipe, i) => (
-                <Card key={i} className="p-4 flex flex-col gap-3">
+                <Card key={`${recipe.name}-${i}`} className="p-4 flex flex-col gap-3">
                   <h3 className="text-base font-bold">{recipe.name}</h3>
                   <p className="text-sm text-text-secondary italic">{recipe.description}</p>
 

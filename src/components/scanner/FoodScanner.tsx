@@ -104,20 +104,24 @@ export function FoodScanner({
       : analysis.food_name;
 
     const ratio = quantity / 100;
-    const success = await onAddMeal({
-      plan_id: planId,
-      meal_type: mealType,
-      food_name: foodName,
-      calories: Math.round(calPer100 * ratio),
-      proteins: Math.round(analysis.proteins_per_100g * ratio),
-      carbs: Math.round(analysis.carbs_per_100g * ratio),
-      fats: Math.round(analysis.fats_per_100g * ratio),
-      quantity_grams: quantity,
-    });
+    try {
+      const success = await onAddMeal({
+        plan_id: planId,
+        meal_type: mealType,
+        food_name: foodName,
+        calories: Math.round(calPer100 * ratio),
+        proteins: Math.round(analysis.proteins_per_100g * ratio),
+        carbs: Math.round(analysis.carbs_per_100g * ratio),
+        fats: Math.round(analysis.fats_per_100g * ratio),
+        quantity_grams: quantity,
+      });
 
-    if (success) {
-      onClose();
-    } else {
+      if (success) {
+        onClose();
+      } else {
+        setSaveError('Erreur lors de la sauvegarde');
+      }
+    } catch {
       setSaveError('Erreur lors de la sauvegarde');
     }
     setSubmitting(false);
