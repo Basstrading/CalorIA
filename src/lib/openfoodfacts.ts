@@ -53,7 +53,7 @@ export async function searchOpenFoodFacts(
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
+    const timeout = setTimeout(() => controller.abort(), 12000);
 
     const res = await fetch(`${BASE_URL}/cgi/search.pl?${params}`, {
       signal: controller.signal,
@@ -81,7 +81,7 @@ export async function lookupBarcode(
 ): Promise<FoodDatabaseEntry | null> {
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
+    const timeout = setTimeout(() => controller.abort(), 12000);
 
     const res = await fetch(`${BASE_URL}/api/v2/product/${barcode}?fields=product_name_fr,product_name,nutriments,code`, {
       signal: controller.signal,
