@@ -1,4 +1,4 @@
-import type { FoodAnalysis, Goal, Meal, RecipeSuggestion } from '../types';
+import type { FoodAnalysis, FoodCategory, Goal, Meal, RecipeSuggestion } from '../types';
 
 // TODO: Move API key to backend for production — exposing it in the client is insecure
 const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY as string;
@@ -269,4 +269,139 @@ Reponds UNIQUEMENT avec un JSON valide, sans markdown, sans backticks :
   }
 
   return parsed;
+}
+
+/* ─── Coach IA — Recommandation de portion intelligente ─── */
+
+const COACH_MODEL = 'google/gemini-2.0-flash-001';
+const COACH_TIMEOUT_MS = 15_000;
+
+export interface CoachInput {
+  foodName: string;
+  caloriesPer100g: number;
+  proteinsPer100g: number;
+  carbsPer100g: number;
+  fatsPer100g: number;
+  foodCategory: FoodCategory;
+  mealType: Meal['meal_type'];
+  mealBudget: number;
+  mealRemaining: number;
+  alreadyEaten: string[];
+  totalDailyBudget: number;
+}
+
+export interface CoachRecommendation {
+  recommendedGrams: number;
+  coachMessage: string;
+}
+
+export async function getCoachRecommendation(
+  input: CoachInput,
+): Promise<CoachRecommendation> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), COACH_TIMEOUT_MS);
+
+  const mealLabel = MEAL_TYPES_FR[input.mealType];
+  const alreadyEatenDesc = input.alreadyEaten.length > 0
+    ? input.alreadyEaten.map((f) => `- ${f}`).join('\n')
+    : '(rien encore)';
+
+  const systemPrompt = `Tu es un coach nutritionniste bienveillant et pragmatique.
+Tu aides les gens a composer des repas equilibres avec des portions REALISTES.
+
+REGLE FONDAMENTALE : Un humain mange des portions normales. Jamais 1kg, 2kg ou 3kg de quoi que ce soit.
+Portions typiques de reference :
+- Viande/poisson : 100-180g
+- Feculents cuits (riz, pates) : 150-250g
+- Legumes : 150-300g
+- Fromage : 30-60g
+- Yaourt : 125g
+- Fruit : 100-200g
+- Sauce/condiment : 15-30g
+- Plat complet (assiette) : 300-450g
+- En-cas/snack : 30-80g
+- Boisson : 200-350ml
+
+COMPOSITION D'UN REPAS : Un repas principal comprend typiquement 2-4 composants (entree, plat, accompagnement, dessert).
+Ta portion doit laisser de la place pour les autres composants.
+
+Pour une collation : c'est un seul aliment, la portion peut utiliser tout le budget collation.`;
+
+  const userPrompt = `CONTEXTE :
+- Budget journalier : ${input.totalDailyBudget} kcal
+- Repas : ${mealLabel} (budget ${input.mealBudget} kcal)
+- Deja mange pour ce repas :
+${alreadyEatenDesc}
+- Calories restantes pour ce repas : ${input.mealRemaining} kcal
+
+ALIMENT :
+- Nom : ${input.foodName}
+- Categorie : ${input.foodCategory}
+- Pour 100g : ${input.caloriesPer100g} kcal | ${input.proteinsPer100g}g prot | ${input.carbsPer100g}g gluc | ${input.fatsPer100g}g lip
+
+Recommande une portion en grammes REALISTE pour cet aliment dans ce contexte.
+Explique brievement pourquoi (2-3 phrases max, tutoiement, bienveillant).
+
+Reponds UNIQUEMENT en JSON valide, sans backticks :
+{
+  "recommended_grams": nombre_entier,
+  "coach_message": "ton conseil"
+}`;
+
+  let response: Response;
+  try {
+    response = await fetch(OPENROUTER_URL, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'HTTP-Referer': window.location.origin,
+        'X-Title': 'CalorIA',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: COACH_MODEL,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        max_tokens: 300,
+        temperature: 0.3,
+      }),
+    });
+  } catch (err) {
+    clearTimeout(timer);
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error('Coach timeout');
+    }
+    throw new Error('Coach network error');
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (!response.ok) {
+    throw new Error(`Coach API error (${response.status})`);
+  }
+
+  const data = await response.json();
+  const raw: string | undefined = data?.choices?.[0]?.message?.content;
+  if (!raw) throw new Error('Coach empty response');
+
+  const cleaned = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+
+  let rawParsed: { recommended_grams?: number; coach_message?: string };
+  try {
+    rawParsed = JSON.parse(cleaned);
+  } catch {
+    throw new Error('Coach invalid JSON');
+  }
+
+  if (typeof rawParsed.recommended_grams !== 'number' || typeof rawParsed.coach_message !== 'string') {
+    throw new Error('Coach invalid shape');
+  }
+
+  return {
+    recommendedGrams: Math.max(10, Math.round(rawParsed.recommended_grams)),
+    coachMessage: rawParsed.coach_message,
+  };
 }

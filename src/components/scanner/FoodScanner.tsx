@@ -4,7 +4,7 @@ import { Card } from '../ui/Card';
 import { Input } from '../ui/Input';
 import { Slider } from '../ui/Slider';
 import { fileToBase64 } from '../../lib/image';
-import { analyzeFood } from '../../lib/openrouter';
+import { analyzeFood, getCoachRecommendation } from '../../lib/openrouter';
 import { calculateSmartPortion } from '../../lib/calories';
 import type { PortionRecommendation } from '../../lib/calories';
 import type { FoodAnalysis, Meal } from '../../types';
@@ -54,6 +54,8 @@ export function FoodScanner({
   const [submitting, setSubmitting] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [portionReco, setPortionReco] = useState<PortionRecommendation | null>(null);
+  const [coachMessage, setCoachMessage] = useState<string | null>(null);
+  const [coachLoading, setCoachLoading] = useState(false);
 
   // Stop camera stream on unmount
   const stopCamera = useCallback(() => {
@@ -64,6 +66,48 @@ export function FoodScanner({
   useEffect(() => {
     return () => stopCamera();
   }, [stopCamera]);
+
+  // Call the LLM coach for intelligent portion advice
+  const fetchCoach = useCallback(async (
+    food: FoodAnalysis,
+    currentMealType: MealType,
+    reco: PortionRecommendation,
+  ) => {
+    setCoachLoading(true);
+    try {
+      const alreadyEaten = meals
+        .filter((m) => m.meal_type === currentMealType)
+        .map((m) => `${m.food_name} (${m.quantity_grams}g, ${m.calories} kcal)`);
+      const result = await getCoachRecommendation({
+        foodName: food.food_name,
+        caloriesPer100g: food.calories_per_100g,
+        proteinsPer100g: food.proteins_per_100g,
+        carbsPer100g: food.carbs_per_100g,
+        fatsPer100g: food.fats_per_100g,
+        foodCategory: food.food_category,
+        mealType: currentMealType,
+        mealBudget: reco.mealBudget,
+        mealRemaining: reco.mealRemaining,
+        alreadyEaten,
+        totalDailyBudget: budget,
+      });
+      // Update portion with LLM recommendation
+      const newCalories = Math.round((result.recommendedGrams / 100) * food.calories_per_100g);
+      setPortionReco((prev) => prev ? {
+        ...prev,
+        recommendedGrams: result.recommendedGrams,
+        recommendedCalories: newCalories,
+        coachMessage: result.coachMessage,
+      } : prev);
+      setCoachMessage(result.coachMessage);
+      setQuantity(result.recommendedGrams);
+    } catch {
+      // Silently fall back to math-based recommendation
+      setCoachMessage(null);
+    } finally {
+      setCoachLoading(false);
+    }
+  }, [budget, meals]);
 
   const processImage = async (base64: string) => {
     setImageBase64(base64);
@@ -87,8 +131,12 @@ export function FoodScanner({
         meals,
       });
       setPortionReco(reco);
+      setCoachMessage(null);
       setQuantity(reco.recommendedGrams > 0 ? reco.recommendedGrams : 100);
       setScreen('result');
+
+      // Fire LLM coach in background
+      fetchCoach(result, mealType, reco);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur lors de l\'analyse. Reessaie.');
       setScreen('capture');
@@ -110,8 +158,12 @@ export function FoodScanner({
       meals,
     });
     setPortionReco(reco);
+    setCoachMessage(null);
     setQuantity(reco.recommendedGrams > 0 ? reco.recommendedGrams : 100);
-  }, [mealType, analysis, budget, meals]);
+
+    // Re-call LLM coach for new meal type
+    fetchCoach(analysis, mealType, reco);
+  }, [mealType, analysis, budget, meals, fetchCoach]);
 
   // Gallery file input handler
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -425,7 +477,14 @@ export function FoodScanner({
                   <p className="text-lg font-bold text-accent mb-1">
                     Portion conseillee : {portionReco.recommendedGrams}g
                   </p>
-                  <p className="text-sm text-text-secondary">{portionReco.coachMessage}</p>
+                  {coachLoading ? (
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                      <p className="text-sm text-text-secondary">Le coach reflechit...</p>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-text-secondary">{coachMessage ?? portionReco.coachMessage}</p>
+                  )}
                 </Card>
               )}
 

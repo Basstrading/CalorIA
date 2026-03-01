@@ -187,6 +187,19 @@ export const CATEGORY_MEAL_SHARE: Record<FoodCategory, number> = {
   sauce_condiment: 0.07,
 };
 
+/** Portion maximale realiste par categorie (en grammes) */
+export const CATEGORY_MAX_PORTION: Record<FoodCategory, number> = {
+  complete_dish: 450,
+  protein: 200,
+  starch: 250,
+  vegetable: 300,
+  dairy: 150,
+  fruit: 200,
+  snack: 80,
+  drink: 400,
+  sauce_condiment: 30,
+};
+
 export const CATEGORY_LABELS_FR: Record<FoodCategory, string> = {
   complete_dish: 'plat complet',
   protein: 'source de proteines',
@@ -249,12 +262,13 @@ export function calculateSmartPortion(input: SmartPortionInput): PortionRecommen
   const categoryShare = isCollation ? 1.0 : CATEGORY_MEAL_SHARE[foodCategory];
   const allocatedCalories = Math.round(mealRemaining * categoryShare);
 
-  // 4. Convertir en grammes
+  // 4. Convertir en grammes (avec cap realiste par categorie)
+  const maxPortion = CATEGORY_MAX_PORTION[foodCategory];
   let recommendedGrams = 0;
   let recommendedCalories = 0;
   if (caloriesPer100g > 0 && allocatedCalories > 0) {
     recommendedGrams = Math.round((allocatedCalories / caloriesPer100g) * 100);
-    recommendedGrams = Math.max(10, Math.min(recommendedGrams, 1000));
+    recommendedGrams = Math.max(10, Math.min(recommendedGrams, maxPortion));
     recommendedCalories = Math.round((recommendedGrams / 100) * caloriesPer100g);
   }
 

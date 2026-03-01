@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { Input } from '../ui/Input';
 import { FoodAutocomplete } from '../food/FoodAutocomplete';
 import { calculateSmartPortion, inferFoodCategory } from '../../lib/calories';
+import { getCoachRecommendation } from '../../lib/openrouter';
 import type { PortionRecommendation } from '../../lib/calories';
-import type { FoodDatabaseEntry, Meal } from '../../types';
+import type { FoodCategory, FoodDatabaseEntry, Meal } from '../../types';
 
 type MealType = Meal['meal_type'];
 
@@ -39,18 +40,64 @@ export function AddMealModal({ planId, budget, meals, onSave, onClose }: AddMeal
   // Track selected food for proportional recalculation
   const [selectedFood, setSelectedFood] = useState<FoodDatabaseEntry | null>(null);
   const [portionReco, setPortionReco] = useState<PortionRecommendation | null>(null);
+  const [coachMessage, setCoachMessage] = useState<string | null>(null);
+  const [coachLoading, setCoachLoading] = useState(false);
+  const [foodCategory, setFoodCategory] = useState<FoodCategory>('complete_dish');
+
+  // Call the LLM coach for intelligent portion advice
+  const fetchCoach = useCallback(async (
+    food: FoodDatabaseEntry,
+    category: FoodCategory,
+    currentMealType: Meal['meal_type'],
+    reco: PortionRecommendation,
+  ) => {
+    setCoachLoading(true);
+    try {
+      const alreadyEaten = meals
+        .filter((m) => m.meal_type === currentMealType)
+        .map((m) => `${m.food_name} (${m.quantity_grams}g, ${m.calories} kcal)`);
+      const result = await getCoachRecommendation({
+        foodName: food.name,
+        caloriesPer100g: food.calories_per_100g,
+        proteinsPer100g: food.proteins_per_100g,
+        carbsPer100g: food.carbs_per_100g,
+        fatsPer100g: food.fats_per_100g,
+        foodCategory: category,
+        mealType: currentMealType,
+        mealBudget: reco.mealBudget,
+        mealRemaining: reco.mealRemaining,
+        alreadyEaten,
+        totalDailyBudget: budget,
+      });
+      const newCalories = Math.round((result.recommendedGrams / 100) * food.calories_per_100g);
+      setPortionReco((prev) => prev ? {
+        ...prev,
+        recommendedGrams: result.recommendedGrams,
+        recommendedCalories: newCalories,
+        coachMessage: result.coachMessage,
+      } : prev);
+      setCoachMessage(result.coachMessage);
+      setQuantity(String(result.recommendedGrams));
+      const ratio = result.recommendedGrams / 100;
+      setCalories(String(Math.round(food.calories_per_100g * ratio)));
+      setProteins(String(Math.round(food.proteins_per_100g * ratio * 10) / 10));
+      setCarbs(String(Math.round(food.carbs_per_100g * ratio * 10) / 10));
+      setFats(String(Math.round(food.fats_per_100g * ratio * 10) / 10));
+    } catch {
+      setCoachMessage(null);
+    } finally {
+      setCoachLoading(false);
+    }
+  }, [budget, meals]);
 
   const handleFoodSelect = (entry: FoodDatabaseEntry) => {
     setSelectedFood(entry);
-    setCalories(String(Math.round(entry.calories_per_100g)));
-    setProteins(String(entry.proteins_per_100g));
-    setCarbs(String(entry.carbs_per_100g));
-    setFats(String(entry.fats_per_100g));
 
     const category = inferFoodCategory(
       entry.name, entry.calories_per_100g,
       entry.proteins_per_100g, entry.carbs_per_100g, entry.fats_per_100g,
     );
+    setFoodCategory(category);
     const reco = calculateSmartPortion({
       foodName: entry.name,
       caloriesPer100g: entry.calories_per_100g,
@@ -63,6 +110,7 @@ export function AddMealModal({ planId, budget, meals, onSave, onClose }: AddMeal
       meals,
     });
     setPortionReco(reco);
+    setCoachMessage(null);
     setQuantity(String(reco.recommendedGrams > 0 ? reco.recommendedGrams : 100));
 
     // Recalculate macros for recommended quantity
@@ -72,6 +120,9 @@ export function AddMealModal({ planId, budget, meals, onSave, onClose }: AddMeal
     setProteins(String(Math.round(entry.proteins_per_100g * ratio * 10) / 10));
     setCarbs(String(Math.round(entry.carbs_per_100g * ratio * 10) / 10));
     setFats(String(Math.round(entry.fats_per_100g * ratio * 10) / 10));
+
+    // Fire LLM coach in background
+    fetchCoach(entry, category, mealType, reco);
   };
 
   const handleQuantityChange = (val: string) => {
@@ -96,27 +147,25 @@ export function AddMealModal({ planId, budget, meals, onSave, onClose }: AddMeal
     // Detach auto-calculation when user manually edits a nutritional field
     setSelectedFood(null);
     setPortionReco(null);
+    setCoachMessage(null);
   };
 
   // Recalculate recommendation when mealType changes
   useEffect(() => {
     if (!selectedFood) return;
-    const category = inferFoodCategory(
-      selectedFood.name, selectedFood.calories_per_100g,
-      selectedFood.proteins_per_100g, selectedFood.carbs_per_100g, selectedFood.fats_per_100g,
-    );
     const reco = calculateSmartPortion({
       foodName: selectedFood.name,
       caloriesPer100g: selectedFood.calories_per_100g,
       proteinsPer100g: selectedFood.proteins_per_100g,
       carbsPer100g: selectedFood.carbs_per_100g,
       fatsPer100g: selectedFood.fats_per_100g,
-      foodCategory: category,
+      foodCategory: foodCategory,
       mealType,
       totalDailyBudget: budget,
       meals,
     });
     setPortionReco(reco);
+    setCoachMessage(null);
     setQuantity(String(reco.recommendedGrams > 0 ? reco.recommendedGrams : 100));
     const qty = reco.recommendedGrams > 0 ? reco.recommendedGrams : 100;
     const ratio = qty / 100;
@@ -124,7 +173,10 @@ export function AddMealModal({ planId, budget, meals, onSave, onClose }: AddMeal
     setProteins(String(Math.round(selectedFood.proteins_per_100g * ratio * 10) / 10));
     setCarbs(String(Math.round(selectedFood.carbs_per_100g * ratio * 10) / 10));
     setFats(String(Math.round(selectedFood.fats_per_100g * ratio * 10) / 10));
-  }, [mealType, selectedFood, budget, meals]);
+
+    // Re-call LLM coach for new meal type
+    fetchCoach(selectedFood, foodCategory, mealType, reco);
+  }, [mealType, selectedFood, foodCategory, budget, meals, fetchCoach]);
 
   const handleSave = async () => {
     setError(null);
@@ -264,7 +316,14 @@ export function AddMealModal({ planId, budget, meals, onSave, onClose }: AddMeal
               <p className="text-lg font-bold text-accent mb-1">
                 Portion conseillee : {portionReco.recommendedGrams}g
               </p>
-              <p className="text-sm text-text-secondary">{portionReco.coachMessage}</p>
+              {coachLoading ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                  <p className="text-sm text-text-secondary">Le coach reflechit...</p>
+                </div>
+              ) : (
+                <p className="text-sm text-text-secondary">{coachMessage ?? portionReco.coachMessage}</p>
+              )}
             </Card>
           )}
 
