@@ -64,5 +64,19 @@ export function useDailyPlan(user: User | null) {
     return false;
   }, [user]);
 
-  return { plan, loading, hasPlanToday, createPlan, getTodayPlan };
+  const resetPlan = useCallback(async () => {
+    if (!user || !plan) return false;
+    const { error } = await supabase
+      .from('daily_plans')
+      .delete()
+      .eq('id', plan.id);
+
+    if (!error) {
+      setPlan(null);
+      return true;
+    }
+    return false;
+  }, [user, plan]);
+
+  return { plan, loading, hasPlanToday, createPlan, getTodayPlan, resetPlan };
 }

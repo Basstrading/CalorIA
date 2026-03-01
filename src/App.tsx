@@ -14,10 +14,11 @@ type AuthPage = 'login' | 'register';
 
 function App() {
   const { user, loading: authLoading, error, signUp, signIn, signOut } = useAuth();
-  const { profile, loading: profileLoading, hasProfile, createProfile } = useProfile(user);
-  const { plan, loading: planLoading, hasPlanToday, createPlan } = useDailyPlan(user);
+  const { profile, loading: profileLoading, hasProfile, createProfile, updateProfile } = useProfile(user);
+  const { plan, loading: planLoading, hasPlanToday, createPlan, resetPlan } = useDailyPlan(user);
   const { meals, loading: mealsLoading, totalCaloriesToday, addMeal, deleteMeal } = useMeals(user, plan?.id ?? null);
   const [authPage, setAuthPage] = useState<AuthPage>('login');
+  const [editingProfile, setEditingProfile] = useState(false);
 
   // Loading state
   if (authLoading || (user && (profileLoading || planLoading || (hasPlanToday && mealsLoading)))) {
@@ -64,9 +65,40 @@ function App() {
     return <Onboarding onComplete={createProfile} />;
   }
 
+  // Editing profile — onboarding in edit mode
+  if (editingProfile) {
+    const handleEditComplete = async (data: Parameters<typeof updateProfile>[0]) => {
+      const success = await updateProfile(data);
+      if (success) {
+        await resetPlan();
+        setEditingProfile(false);
+      }
+      return success;
+    };
+    return (
+      <Onboarding
+        onComplete={handleEditComplete}
+        initialData={{
+          sex: profile.sex,
+          age: profile.age,
+          weight: profile.weight,
+          height: profile.height,
+          activity_profile: profile.activity_profile,
+          goal: profile.goal,
+        }}
+      />
+    );
+  }
+
   // No plan today — daily planner
   if (!hasPlanToday || !plan) {
-    return <DailyPlanner profile={profile} onValidate={createPlan} />;
+    return (
+      <DailyPlanner
+        profile={profile}
+        onValidate={createPlan}
+        onEditProfile={() => setEditingProfile(true)}
+      />
+    );
   }
 
   // Dashboard
@@ -78,6 +110,7 @@ function App() {
       totalCaloriesToday={totalCaloriesToday}
       onAddMeal={addMeal}
       onDeleteMeal={deleteMeal}
+      onResetPlan={resetPlan}
       onSignOut={signOut}
     />
   );

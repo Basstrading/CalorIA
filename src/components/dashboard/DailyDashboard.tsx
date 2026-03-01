@@ -17,6 +17,7 @@ interface DailyDashboardProps {
   totalCaloriesToday: number;
   onAddMeal: (data: Omit<Meal, 'id' | 'user_id' | 'created_at'>) => Promise<boolean>;
   onDeleteMeal: (id: string) => Promise<boolean>;
+  onResetPlan: () => Promise<boolean>;
   onSignOut: () => void;
 }
 
@@ -47,6 +48,7 @@ export function DailyDashboard({
   totalCaloriesToday,
   onAddMeal,
   onDeleteMeal,
+  onResetPlan,
   onSignOut,
 }: DailyDashboardProps) {
   const [showAddMeal, setShowAddMeal] = useState(false);
@@ -83,9 +85,22 @@ export function DailyDashboard({
     <div className="max-w-md mx-auto min-h-screen min-h-dvh pb-24">
       {/* Header */}
       <div className="p-6 pb-2 flex items-center justify-between">
-        <div>
-          <p className="text-text-secondary text-sm">{formatFrenchDate()}</p>
-          <h1 className="text-xl font-bold tracking-tight mt-0.5">Mon budget</h1>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onResetPlan}
+            className="p-2 -ml-2 text-text-secondary hover:text-text-primary transition-colors"
+            aria-label="Refaire ma journee"
+            title="Refaire ma journee"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
+          <div>
+            <p className="text-text-secondary text-sm">{formatFrenchDate()}</p>
+            <h1 className="text-xl font-bold tracking-tight mt-0.5">Mon budget</h1>
+          </div>
         </div>
         <button
           type="button"

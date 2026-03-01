@@ -8,6 +8,7 @@ import type { ActivitySet, UserProfile } from '../../types';
 interface DailyPlannerProps {
   profile: UserProfile;
   onValidate: (activities: ActivitySet, tdee: number, budget: number) => Promise<boolean>;
+  onEditProfile?: () => void;
 }
 
 function formatFrenchDate(): string {
@@ -20,7 +21,7 @@ function formatFrenchDate(): string {
 
 type ActivityKey = string;
 
-export function DailyPlanner({ profile, onValidate }: DailyPlannerProps) {
+export function DailyPlanner({ profile, onValidate, onEditProfile }: DailyPlannerProps) {
   const [selected, setSelected] = useState<Set<ActivityKey>>(new Set());
   const [values, setValues] = useState<Record<ActivityKey, number>>(() => {
     const init: Record<string, number> = {};
@@ -140,9 +141,26 @@ export function DailyPlanner({ profile, onValidate }: DailyPlannerProps) {
     <div className="max-w-md mx-auto min-h-screen min-h-dvh p-6 flex flex-col gap-5">
       {/* Header */}
       <div className="pt-2">
-        <p className="text-text-secondary text-sm">{formatFrenchDate()}</p>
-        <h1 className="text-2xl font-bold tracking-tight mt-1">Bonjour</h1>
-        <p className="text-text-secondary mt-0.5">Que prevois-tu aujourd'hui ?</p>
+        <div className="flex items-center gap-3">
+          {onEditProfile && (
+            <button
+              type="button"
+              onClick={onEditProfile}
+              className="p-2 -ml-2 text-text-secondary hover:text-text-primary transition-colors"
+              aria-label="Modifier mon profil"
+              title="Modifier mon profil"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+            </button>
+          )}
+          <div>
+            <p className="text-text-secondary text-sm">{formatFrenchDate()}</p>
+            <h1 className="text-2xl font-bold tracking-tight mt-1">Bonjour</h1>
+            <p className="text-text-secondary mt-0.5">Que prevois-tu aujourd'hui ?</p>
+          </div>
+        </div>
       </div>
 
       {/* Activity chips */}

@@ -120,3 +120,54 @@ export function suggestMealSplit(totalCalories: number): {
     dinner: Math.round(totalCalories * 0.30),
   };
 }
+
+/* ─── Composition corporelle ─── */
+
+/** Calcul de l'IMC (Indice de Masse Corporelle). */
+export function calculateBMI(weight: number, height: number): number {
+  const h = height / 100;
+  return weight / (h * h);
+}
+
+/** Interpretation de l'IMC avec label et couleur. */
+export function interpretBMI(bmi: number): { label: string; color: string } {
+  if (bmi < 18.5) return { label: 'Insuffisance ponderale', color: '#f59e0b' };
+  if (bmi < 25) return { label: 'Normal', color: '#22c55e' };
+  if (bmi < 30) return { label: 'Surpoids', color: '#f59e0b' };
+  return { label: 'Obesite', color: '#ef4444' };
+}
+
+/** Fourchette de poids ideal basee sur un IMC entre 20 et 25. */
+export function calculateIdealWeightRange(height: number): { min: number; max: number } {
+  const h = height / 100;
+  return {
+    min: Math.round(20 * h * h),
+    max: Math.round(25 * h * h),
+  };
+}
+
+/**
+ * Estimation de la composition corporelle.
+ * Masse grasse via la formule de Deurenberg :
+ *   BF% = 1.20 * IMC + 0.23 * age - 10.8 * sex_factor - 5.4
+ *   sex_factor : 1 pour homme, 0 pour femme.
+ */
+export function calculateBodyComposition(
+  sex: 'M' | 'F',
+  age: number,
+  weight: number,
+  height: number,
+): { bmi: number; bodyFatPercent: number; leanMass: number; muscleMass: number } {
+  const bmi = calculateBMI(weight, height);
+  const sexFactor = sex === 'M' ? 1 : 0;
+  let bodyFatPercent = 1.20 * bmi + 0.23 * age - 10.8 * sexFactor - 5.4;
+  bodyFatPercent = Math.max(3, Math.min(60, bodyFatPercent));
+  const leanMass = weight * (1 - bodyFatPercent / 100);
+  const muscleMass = leanMass * 0.4;
+  return {
+    bmi: Math.round(bmi * 10) / 10,
+    bodyFatPercent: Math.round(bodyFatPercent * 10) / 10,
+    leanMass: Math.round(leanMass * 10) / 10,
+    muscleMass: Math.round(muscleMass * 10) / 10,
+  };
+}

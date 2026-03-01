@@ -1,13 +1,19 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { Toggle } from '../components/ui/Toggle';
+import {
+  calculateBodyComposition,
+  calculateIdealWeightRange,
+  interpretBMI,
+} from '../lib/calories';
 import type { ProfileInput } from '../hooks/useProfile';
 import type { Goal } from '../types';
 
 interface OnboardingProps {
   onComplete: (data: ProfileInput) => Promise<boolean>;
+  initialData?: ProfileInput;
 }
 
 const GOAL_OPTIONS: { value: Goal; label: string; description: string }[] = [
@@ -16,24 +22,68 @@ const GOAL_OPTIONS: { value: Goal; label: string; description: string }[] = [
   { value: 'gain_muscle', label: 'Prendre du muscle', description: 'Surplus calorique de 300 kcal/jour' },
 ];
 
-export function Onboarding({ onComplete }: OnboardingProps) {
-  const [sex, setSex] = useState<'M' | 'F'>('M');
-  const [age, setAge] = useState('');
-  const [weight, setWeight] = useState('');
-  const [height, setHeight] = useState('');
-  const [activityProfile, setActivityProfile] = useState<'sportif' | 'peu_sportif'>('sportif');
-  const [goal, setGoal] = useState<Goal>('lose_weight');
+function getCoachRecommendation(goal: Goal, bmi: number, bodyFatPercent: number, sex: 'M' | 'F'): string {
+  const bfHigh = sex === 'M' ? 20 : 30;
+  const bfLow = sex === 'M' ? 12 : 20;
+  const isBfHigh = bodyFatPercent > bfHigh;
+  const isBfLow = bodyFatPercent < bfLow;
+
+  if (goal === 'lose_weight') {
+    if (bmi >= 25 && isBfHigh)
+      return 'Ton IMC et ta masse grasse sont eleves. Un deficit modere (-500 kcal) avec de la musculation preservera tes muscles tout en perdant du gras.';
+    if (bmi < 25 && isBfHigh)
+      return 'Ton poids est correct mais ta masse grasse est elevee. Privilegie la recomposition corporelle : musculation + leger deficit.';
+    if (isBfLow)
+      return 'Ta masse grasse est deja basse. Perdre davantage pourrait impacter ta sante. Envisage plutot un maintien ou une prise de muscle.';
+    return 'Bon profil pour une seche. Un deficit de 500 kcal/jour te fera perdre ~0.5 kg/semaine de facon saine.';
+  }
+
+  if (goal === 'gain_muscle') {
+    if (isBfHigh)
+      return 'Ta masse grasse est elevee. Commence par une recomposition (maintien calorique + musculation) avant un surplus.';
+    if (isBfLow)
+      return 'Excellent point de depart pour une prise de muscle ! Un surplus de 300 kcal avec un bon apport en proteines maximisera tes gains.';
+    return 'Bon profil pour une prise de muscle. Vise 1.6-2g de proteines/kg et un surplus modere de 300 kcal.';
+  }
+
+  // maintain
+  if (isBfHigh)
+    return 'En maintien, ajoute de la musculation pour ameliorer ta composition corporelle sans changer de poids.';
+  if (isBfLow)
+    return 'Tu es deja sec(he). Le maintien est un bon choix pour stabiliser ton physique actuel.';
+  return 'Bonne composition corporelle ! Le maintien te permettra de conserver tes acquis.';
+}
+
+export function Onboarding({ onComplete, initialData }: OnboardingProps) {
+  const isEditing = !!initialData;
+
+  const [sex, setSex] = useState<'M' | 'F'>(initialData?.sex ?? 'M');
+  const [age, setAge] = useState(initialData?.age?.toString() ?? '');
+  const [weight, setWeight] = useState(initialData?.weight?.toString() ?? '');
+  const [height, setHeight] = useState(initialData?.height?.toString() ?? '');
+  const [activityProfile, setActivityProfile] = useState<'sportif' | 'peu_sportif'>(
+    initialData?.activity_profile ?? 'sportif',
+  );
+  const [goal, setGoal] = useState<Goal>(initialData?.goal ?? 'lose_weight');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const heightNum = parseFloat(height);
-  const weightNum = parseFloat(weight);
-  const idealWeight = !isNaN(heightNum) && heightNum > 0
-    ? Math.round(22 * (heightNum / 100) ** 2)
-    : null;
-  const weightDiff = idealWeight !== null && !isNaN(weightNum)
-    ? Math.round(weightNum - idealWeight)
-    : null;
+  // Coach analysis — computed in real time when age/weight/height are filled
+  const coachAnalysis = useMemo(() => {
+    const ageNum = parseInt(age, 10);
+    const wNum = parseFloat(weight);
+    const hNum = parseFloat(height);
+    if (isNaN(ageNum) || isNaN(wNum) || isNaN(hNum) || hNum <= 0 || wNum <= 0 || ageNum <= 0)
+      return null;
+
+    const comp = calculateBodyComposition(sex, ageNum, wNum, hNum);
+    const bmiInterpretation = interpretBMI(comp.bmi);
+    const idealRange = calculateIdealWeightRange(hNum);
+    const diff = Math.round(wNum - (idealRange.min + idealRange.max) / 2);
+    const recommendation = getCoachRecommendation(goal, comp.bmi, comp.bodyFatPercent, sex);
+
+    return { ...comp, bmiInterpretation, idealRange, diff, recommendation };
+  }, [sex, age, weight, height, goal]);
 
   const validate = (): ProfileInput | null => {
     const ageNum = parseInt(age, 10);
@@ -85,9 +135,11 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       <div className="flex-1 flex flex-col gap-6">
         {/* Header */}
         <div className="pt-4">
-          <h1 className="text-3xl font-bold tracking-tight">Bienvenue</h1>
+          <h1 className="text-3xl font-bold tracking-tight">
+            {isEditing ? 'Modifier mon profil' : 'Bienvenue'}
+          </h1>
           <p className="text-text-secondary mt-1">
-            Quelques infos pour commencer
+            {isEditing ? 'Mets a jour tes informations' : 'Quelques infos pour commencer'}
           </p>
         </div>
 
@@ -141,31 +193,75 @@ export function Onboarding({ onComplete }: OnboardingProps) {
             value={height}
             onChange={(e) => setHeight(e.target.value)}
           />
+        </Card>
 
-          {/* Poids ideal */}
-          {idealWeight !== null && weightDiff !== null && (
+        {/* Coach Analysis */}
+        {coachAnalysis && (
+          <Card className="flex flex-col gap-3">
+            <p className="text-sm font-semibold text-text-primary">Analyse coach</p>
+
+            {/* IMC */}
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-text-secondary">IMC</span>
+              <div className="flex items-center gap-2">
+                <span className="text-lg font-bold" style={{ color: coachAnalysis.bmiInterpretation.color }}>
+                  {coachAnalysis.bmi}
+                </span>
+                <span
+                  className="text-xs px-2 py-0.5 rounded-full font-medium"
+                  style={{
+                    backgroundColor: coachAnalysis.bmiInterpretation.color + '20',
+                    color: coachAnalysis.bmiInterpretation.color,
+                  }}
+                >
+                  {coachAnalysis.bmiInterpretation.label}
+                </span>
+              </div>
+            </div>
+
+            {/* Ideal weight range */}
             <div className="bg-card border border-border rounded-card px-4 py-3 text-sm">
               <p className="text-text-secondary">
-                Poids ideal (IMC 22) : <span className="font-bold text-text-primary">{idealWeight} kg</span>
+                Poids ideal : <span className="font-bold text-text-primary">{coachAnalysis.idealRange.min}-{coachAnalysis.idealRange.max} kg</span>
               </p>
-              {weightDiff > 0 && (
-                <p className="text-text-secondary mt-1">
-                  {weightDiff} kg a perdre
-                </p>
+              {coachAnalysis.diff > 0 && (
+                <p className="text-text-secondary mt-1">{coachAnalysis.diff} kg au-dessus de la moyenne ideale</p>
               )}
-              {weightDiff < 0 && (
-                <p className="text-text-secondary mt-1">
-                  {Math.abs(weightDiff)} kg a prendre
-                </p>
+              {coachAnalysis.diff < 0 && (
+                <p className="text-text-secondary mt-1">{Math.abs(coachAnalysis.diff)} kg en-dessous de la moyenne ideale</p>
               )}
-              {weightDiff === 0 && (
-                <p className="text-accent mt-1 font-medium">
-                  Tu es a ton poids ideal !
-                </p>
+              {coachAnalysis.diff === 0 && (
+                <p className="text-accent mt-1 font-medium">Tu es a ton poids ideal !</p>
               )}
             </div>
-          )}
-        </Card>
+
+            {/* Body composition grid */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-card border border-border rounded-card px-3 py-2 text-center">
+                <p className="text-xs text-text-secondary">Masse grasse</p>
+                <p className="text-lg font-bold text-text-primary">{coachAnalysis.bodyFatPercent}%</p>
+              </div>
+              <div className="bg-card border border-border rounded-card px-3 py-2 text-center">
+                <p className="text-xs text-text-secondary">Masse maigre</p>
+                <p className="text-lg font-bold text-text-primary">{coachAnalysis.leanMass} kg</p>
+              </div>
+              <div className="bg-card border border-border rounded-card px-3 py-2 text-center">
+                <p className="text-xs text-text-secondary">Masse musculaire</p>
+                <p className="text-lg font-bold text-text-primary">{coachAnalysis.muscleMass} kg</p>
+              </div>
+              <div className="bg-card border border-border rounded-card px-3 py-2 text-center">
+                <p className="text-xs text-text-secondary">Poids actuel</p>
+                <p className="text-lg font-bold text-text-primary">{parseFloat(weight)} kg</p>
+              </div>
+            </div>
+
+            {/* Coach recommendation */}
+            <div className="bg-accent-soft border border-accent/20 rounded-card px-4 py-3">
+              <p className="text-xs font-semibold text-accent mb-1">Recommandation coach</p>
+              <p className="text-sm text-text-primary leading-relaxed">{coachAnalysis.recommendation}</p>
+            </div>
+          </Card>
+        )}
 
         {/* Objectif */}
         <Card>
@@ -219,7 +315,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
             onClick={handleSubmit}
             disabled={submitting}
           >
-            {submitting ? 'Enregistrement...' : 'C\'est parti !'}
+            {submitting ? 'Enregistrement...' : isEditing ? 'Mettre a jour' : 'C\'est parti !'}
           </Button>
         </div>
       </div>
