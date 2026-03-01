@@ -81,7 +81,11 @@ export function FoodScanner({
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) handleFileSelected(file);
+    if (!file) {
+      setError('Aucune image recue. Reessaie.');
+      return;
+    }
+    handleFileSelected(file);
     // Reset so the same file can be selected again
     e.target.value = '';
   };
@@ -205,13 +209,15 @@ export function FoodScanner({
                 </svg>
               </button>
 
-              <button
-                type="button"
-                onClick={() => galleryInputRef.current?.click()}
-                className="text-sm text-accent font-medium"
-              >
-                Choisir depuis la galerie
-              </button>
+              <div className="flex gap-4">
+                <button
+                  type="button"
+                  onClick={() => galleryInputRef.current?.click()}
+                  className="text-sm text-accent font-medium"
+                >
+                  Galerie
+                </button>
+              </div>
 
               {error && (
                 <div className="flex flex-col items-center gap-2">
