@@ -31,32 +31,28 @@ export async function searchCiqual(
   for (const entry of data) {
     const name = normalize(entry.alim_nom_fr);
 
-    // All tokens must match at a word boundary (start of string or after non-letter)
-    let allMatch = true;
+    // Count how many tokens match at a word boundary
+    let matchedTokens = 0;
     let totalIndex = 0;
     for (const token of tokens) {
-      let found = false;
       let searchFrom = 0;
       while (searchFrom <= name.length - token.length) {
         const idx = name.indexOf(token, searchFrom);
         if (idx === -1) break;
-        // Accept if at start of string or preceded by a non-letter character
         if (idx === 0 || !/[a-z]/.test(name[idx - 1])) {
           totalIndex += idx;
-          found = true;
+          matchedTokens++;
           break;
         }
         searchFrom = idx + 1;
       }
-      if (!found) {
-        allMatch = false;
-        break;
-      }
     }
-    if (!allMatch) continue;
+    if (matchedTokens === 0) continue;
 
-    // Score: prefer shorter names (more specific) and earlier matches
-    const score = name.length + totalIndex;
+    // Score: full matches first (lower = better), then partial matches
+    // Penalty of 10000 per missing token ensures full matches always rank first
+    const missingPenalty = (tokens.length - matchedTokens) * 10000;
+    const score = missingPenalty + name.length + totalIndex;
     scored.push({ entry, score });
   }
 
